@@ -1,0 +1,120 @@
+from __future__ import annotations
+
+import asyncio
+import logging
+
+import discord
+from discord.ext import commands
+import requests
+
+from .config import Settings
+from .db import TrackerDB
+from .osu_api import OsuApi
+from .tracker_service import TrackerService, safe_channel_name
+
+log = logging.getLogger(__name__)
+
+
+def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
+    intents = discord.Intents.default()
+    intents.guilds = True
+    intents.messages = True
+    intents.message_content = True
+
+    bot = commands.Bot(command_prefix=settings.command_prefix, intents=intents)
+    service = TrackerService(bot, settings, db, api)
+
+    @bot.event
+    async def on_ready() -> None:
+        log.info("Bot ready as %s (%s)", bot.user, bot.user.id if bot.user else "?")
+        bot.loop.create_task(poll_loop())
+
+    async def poll_loop() -> None:
+        await bot.wait_until_ready()
+        while not bot.is_closed():
+            try:
+                await service.poll_once()
+            except Exception:
+                log.exception("Polling loop failed")
+            await asyncio.sleep(settings.poll_interval)
+
+    def _admin_only() -> commands.check:
+        async def predicate(ctx: commands.Context) -> bool:
+            perms = getattr(ctx.author, "guild_permissions", None)
+            return bool(perms and perms.administrator)
+
+        return commands.check(predicate)
+
+    @bot.command(name="track")
+    @_admin_only()
+    async def track(ctx: commands.Context, channel_id: int, osu_username: str) -> None:
+        channel = bot.get_channel(channel_id) or await bot.fetch_channel(channel_id)
+        if not isinstance(channel, discord.TextChannel):
+            await ctx.reply("Channel must be a text channel.")
+            return
+        if ctx.guild is None or channel.guild.id != ctx.guild.id:
+            await ctx.reply("Channel must be in this server.")
+            return
+        query = osu_username.strip()
+        try:
+            if query.isdigit():
+                user = api.fetch_user_by_id(int(query), settings.default_ruleset)
+            else:
+                user = api.fetch_user_by_username(query, settings.default_ruleset)
+        except requests.HTTPError as e:
+            code = getattr(e.response, "status_code", None)
+            await ctx.reply(f"Could not resolve osu user `{query}` (HTTP {code}).")
+            return
+
+        user_id = int(user["id"])
+        username = str(user.get("username", osu_username))
+        db.upsert_tracker(ctx.guild.id, channel.id, user_id, username, settings.default_ruleset)
+        db.put_state(channel.id, snapshot=None, recent_score_ids=[], account_issue=None)
+
+        new_name = safe_channel_name(username, user_id)
+        try:
+            await channel.edit(name=new_name, reason=f"Tracking osu user {username}")
+        except discord.Forbidden:
+            await ctx.reply(f"Tracking added, but I couldn't rename <#{channel.id}>.")
+            return
+
+        await ctx.reply(f"Now tracking `{username}` (`{user_id}`) in <#{channel.id}>.")
+
+    @bot.command(name="untrack")
+    @_admin_only()
+    async def untrack(ctx: commands.Context, channel_id: int) -> None:
+        count = db.remove_tracker(channel_id)
+        if count:
+            await ctx.reply(f"Stopped tracking for <#{channel_id}>.")
+        else:
+            await ctx.reply("No tracker found for that channel.")
+
+    @bot.command(name="tracks")
+    @_admin_only()
+    async def tracks(ctx: commands.Context) -> None:
+        if ctx.guild is None:
+            await ctx.reply("Use this in a server.")
+            return
+        rows = [r for r in db.list_trackers() if r.guild_id == ctx.guild.id]
+        if not rows:
+            await ctx.reply("No trackers configured in this server.")
+            return
+        msg = "\n".join(
+            f"- <#{r.channel_id}> → `{r.username}` (`{r.user_id}`) · `{r.ruleset}`"
+            for r in rows
+        )
+        await ctx.reply(msg)
+
+    @track.error
+    @untrack.error
+    @tracks.error
+    async def _admin_error(ctx: commands.Context, error: commands.CommandError) -> None:
+        if isinstance(error, commands.CheckFailure):
+            await ctx.reply("Admin only.")
+            return
+        if isinstance(error, commands.MissingRequiredArgument):
+            await ctx.reply(f"Usage: `{settings.command_prefix}{ctx.command.name} {ctx.command.signature}`")
+            return
+        raise error
+
+    return bot

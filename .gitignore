@@ -1,0 +1,8 @@
+.env
+__pycache__/
+*.py[cod]
+*.log
+tracker.db
+osu_state*.json
+.DS_Store
+Thumbs.db
