@@ -1,8 +1,8 @@
-# osu-track
+# osu!track
 
-small discord bot for tracking osu profiles in server channels.
+lite discord bot for tracking osu profiles in server channels.
 
-it polls osu api, posts stat changes, recent completed plays, medal updates, and account status alerts.
+it polls osu api, posts stat changes, recent plays, medal updates, and account status alerts.
 
 ## setup
 
@@ -13,12 +13,10 @@ it polls osu api, posts stat changes, recent completed plays, medal updates, and
 4. run:
    `py main.py`
 
-## commands
+## commands (admin only)
 
 - `!track <channel_id> <osu_username_or_id>`
 - `!untrack <channel_id>`
 - `!tracks`
-
-admin only.
 
 when you track someone, the bot renames the channel to `username-id` and sends updates there.
