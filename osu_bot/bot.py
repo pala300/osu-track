@@ -4,8 +4,8 @@ import asyncio
 import logging
 
 import discord
-from discord.ext import commands
 import requests
+from discord.ext import commands
 
 from .config import Settings
 from .db import TrackerDB
@@ -42,7 +42,6 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
         async def predicate(ctx: commands.Context) -> bool:
             perms = getattr(ctx.author, "guild_permissions", None)
             return bool(perms and perms.administrator)
-
         return commands.check(predicate)
 
     @bot.command(name="track")
@@ -57,10 +56,7 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
             return
         query = osu_username.strip()
         try:
-            if query.isdigit():
-                user = api.fetch_user_by_id(int(query), settings.default_ruleset)
-            else:
-                user = api.fetch_user_by_username(query, settings.default_ruleset)
+            user = api.fetch_user_by_id(int(query), settings.default_ruleset) if query.isdigit() else api.fetch_user_by_username(query, settings.default_ruleset)
         except requests.HTTPError as e:
             code = getattr(e.response, "status_code", None)
             await ctx.reply(f"Could not resolve osu user `{query}` (HTTP {code}).")
@@ -69,7 +65,15 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
         user_id = int(user["id"])
         username = str(user.get("username", osu_username))
         db.upsert_tracker(ctx.guild.id, channel.id, user_id, username, settings.default_ruleset)
-        db.put_state(channel.id, snapshot=None, recent_score_ids=[], account_issue=None)
+        db.put_state(
+            channel.id,
+            snapshot=None,
+            recent_score_ids=[],
+            account_issue=None,
+            last_play_time=None,
+            pending_snapshot=None,
+            pending_changes=None,
+        )
 
         new_name = safe_channel_name(username, user_id)
         try:

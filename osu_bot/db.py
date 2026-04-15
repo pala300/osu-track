@@ -21,6 +21,9 @@ class TrackerState:
     snapshot: dict[str, Any] | None
     recent_score_ids: list[str]
     account_issue: str | None
+    last_play_time: float | None
+    pending_snapshot: dict[str, Any] | None
+    pending_changes: list[dict[str, Any]] | None
 
 
 class TrackerDB:
@@ -47,12 +50,26 @@ class TrackerDB:
                 snapshot_json TEXT,
                 recent_score_ids_json TEXT,
                 account_issue TEXT,
+                last_play_time REAL,
+                pending_snapshot_json TEXT,
+                pending_changes_json TEXT,
                 updated_at TEXT NOT NULL DEFAULT (datetime('now')),
                 FOREIGN KEY(channel_id) REFERENCES trackers(channel_id) ON DELETE CASCADE
             );
             """
         )
+        self._migrate()
         self.conn.commit()
+
+    def _migrate(self) -> None:
+        cols = {row[1] for row in self.conn.execute("PRAGMA table_info(tracker_state)").fetchall()}
+        for col, definition in [
+            ("last_play_time",       "REAL"),
+            ("pending_snapshot_json","TEXT"),
+            ("pending_changes_json", "TEXT"),
+        ]:
+            if col not in cols:
+                self.conn.execute(f"ALTER TABLE tracker_state ADD COLUMN {col} {definition}")
 
     def upsert_tracker(
         self, guild_id: int, channel_id: int, user_id: int, username: str, ruleset: str
@@ -94,14 +111,24 @@ class TrackerDB:
 
     def get_state(self, channel_id: int) -> TrackerState:
         row = self.conn.execute(
-            "SELECT snapshot_json, recent_score_ids_json, account_issue FROM tracker_state WHERE channel_id = ?",
+            """SELECT snapshot_json, recent_score_ids_json, account_issue,
+                      last_play_time, pending_snapshot_json, pending_changes_json
+               FROM tracker_state WHERE channel_id = ?""",
             (channel_id,),
         ).fetchone()
         if row is None:
-            return TrackerState(snapshot=None, recent_score_ids=[], account_issue=None)
-        snapshot = json.loads(row["snapshot_json"]) if row["snapshot_json"] else None
-        recent = json.loads(row["recent_score_ids_json"]) if row["recent_score_ids_json"] else []
-        return TrackerState(snapshot=snapshot, recent_score_ids=recent, account_issue=row["account_issue"])
+            return TrackerState(
+                snapshot=None, recent_score_ids=[], account_issue=None,
+                last_play_time=None, pending_snapshot=None, pending_changes=None,
+            )
+        return TrackerState(
+            snapshot=json.loads(row["snapshot_json"]) if row["snapshot_json"] else None,
+            recent_score_ids=json.loads(row["recent_score_ids_json"]) if row["recent_score_ids_json"] else [],
+            account_issue=row["account_issue"],
+            last_play_time=row["last_play_time"],
+            pending_snapshot=json.loads(row["pending_snapshot_json"]) if row["pending_snapshot_json"] else None,
+            pending_changes=json.loads(row["pending_changes_json"]) if row["pending_changes_json"] else None,
+        )
 
     def put_state(
         self,
@@ -110,15 +137,24 @@ class TrackerDB:
         snapshot: dict[str, Any] | None,
         recent_score_ids: list[str],
         account_issue: str | None,
+        last_play_time: float | None = None,
+        pending_snapshot: dict[str, Any] | None = None,
+        pending_changes: list[dict[str, Any]] | None = None,
     ) -> None:
         self.conn.execute(
             """
-            INSERT INTO tracker_state(channel_id, snapshot_json, recent_score_ids_json, account_issue, updated_at)
-            VALUES(?, ?, ?, ?, datetime('now'))
+            INSERT INTO tracker_state(
+                channel_id, snapshot_json, recent_score_ids_json, account_issue,
+                last_play_time, pending_snapshot_json, pending_changes_json, updated_at
+            )
+            VALUES(?, ?, ?, ?, ?, ?, ?, datetime('now'))
             ON CONFLICT(channel_id) DO UPDATE SET
                 snapshot_json=excluded.snapshot_json,
                 recent_score_ids_json=excluded.recent_score_ids_json,
                 account_issue=excluded.account_issue,
+                last_play_time=excluded.last_play_time,
+                pending_snapshot_json=excluded.pending_snapshot_json,
+                pending_changes_json=excluded.pending_changes_json,
                 updated_at=datetime('now')
             """,
             (
@@ -126,6 +162,9 @@ class TrackerDB:
                 json.dumps(snapshot) if snapshot is not None else None,
                 json.dumps(recent_score_ids),
                 account_issue,
+                last_play_time,
+                json.dumps(pending_snapshot) if pending_snapshot is not None else None,
+                json.dumps(pending_changes) if pending_changes is not None else None,
             ),
         )
         self.conn.commit()

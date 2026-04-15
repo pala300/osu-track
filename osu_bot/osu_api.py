@@ -20,10 +20,10 @@ class OsuApi:
         resp = requests.post(
             "https://osu.ppy.sh/oauth/token",
             json={
-                "client_id": self.client_id,
+                "client_id":     self.client_id,
                 "client_secret": self.client_secret,
-                "grant_type": "client_credentials",
-                "scope": "public",
+                "grant_type":    "client_credentials",
+                "scope":         "public",
             },
             timeout=15,
         )
@@ -70,25 +70,27 @@ class OsuApi:
             return data["scores"]
         return []
 
-    def fetch_score_details(self, score: dict[str, Any], ruleset: str) -> dict[str, Any] | None:
-        """
-        Fetch richer score details used by the score page.
-        For legacy scores: /scores/{ruleset}/{legacy_score_id}
-        For lazer/global ids: /scores/{id}
-        """
-        legacy_id = score.get("legacy_score_id")
-        score_id = score.get("id")
-        urls: list[str] = []
-        if legacy_id:
-            urls.append(f"https://osu.ppy.sh/api/v2/scores/{ruleset}/{legacy_id}")
-        if score_id:
-            urls.append(f"https://osu.ppy.sh/api/v2/scores/{score_id}")
-        for url in urls:
-            resp = requests.get(url, headers=self._headers(), timeout=15)
-            if resp.status_code == 404:
-                continue
-            resp.raise_for_status()
-            data = resp.json()
-            if isinstance(data, dict):
-                return data
-        return None
+    def fetch_beatmap(self, beatmap_id: int) -> dict[str, Any] | None:
+        resp = requests.get(
+            f"https://osu.ppy.sh/api/v2/beatmaps/{beatmap_id}",
+            headers=self._headers(),
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            return None
+        return resp.json()
+
+    def fetch_beatmap_max_pp(self, beatmap_id: int, ruleset: str, mods: list[str] | None = None) -> float | None:
+        payload: dict[str, Any] = {"ruleset": ruleset}
+        if mods:
+            payload["mods"] = [{"acronym": m} for m in mods]
+        resp = requests.post(
+            f"https://osu.ppy.sh/api/v2/beatmaps/{beatmap_id}/attributes",
+            headers=self._headers(),
+            json=payload,
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+        return data.get("attributes", {}).get("pp_100") or data.get("attributes", {}).get("max_pp")
