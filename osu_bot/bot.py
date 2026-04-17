@@ -57,12 +57,16 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
     bot = commands.Bot(command_prefix=settings.command_prefix, intents=intents)
     service = TrackerService(bot, settings, db, api)
 
+    command_mentions: dict[str, str] = {}
+
     @bot.event
     async def on_ready() -> None:
         log.info("Bot ready as %s (%s)", bot.user, bot.user.id if bot.user else "?")
         try:
             synced = await bot.tree.sync()
             log.info("Synced %d slash commands", len(synced))
+            for cmd in synced:
+                command_mentions[cmd.name] = cmd.mention
         except Exception as e:
             log.exception("Failed to sync commands: %s", e)
         bot.loop.create_task(poll_loop())
@@ -235,6 +239,22 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
         except Exception:
             log.exception("Error in /bt command")
             await interaction.followup.send("Something went wrong. Please try again.")
+
+    @bot.tree.command(name="help", description="show available commands")
+    async def help_command(interaction: discord.Interaction) -> None:
+        def m(name: str) -> str:
+            return command_mentions.get(name, f"`/{name}`")
+
+        lines = [
+            "available commands:\n",
+            f"{m('link')} `<username>` — link your discord to your osu! account",
+            f"{m('unlink')} — unlink your discord from your osu! account",
+            f"{m('rs')} `[username]` — show your most recent score",
+            f"{m('bt')} `[username]` — show your best score from today",
+            f"{m('map')} `<beatmap>` — show server scores on a beatmap",
+            f"{m('help')} — show this",
+        ]
+        await interaction.response.send_message("\n".join(lines), ephemeral=True)
 
     @bot.tree.command(name="map", description="Show server scores on a beatmap")
     @app_commands.describe(beatmap="beatmap URL or ID")
