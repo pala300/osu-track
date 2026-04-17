@@ -120,16 +120,17 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
     @bot.tree.command(name="link", description="Link your Discord account to your osu! username")
     @app_commands.describe(username="Your osu! username")
     async def link_command(interaction: discord.Interaction, username: str) -> None:
+        await interaction.response.defer(ephemeral=True)
         query = username.strip()
         try:
-            user = api.fetch_user_by_username(query, settings.default_ruleset)
+            user = await bot.loop.run_in_executor(None, api.fetch_user_by_username, query, settings.default_ruleset)
         except requests.HTTPError:
-            await interaction.response.send_message(f"Could not find osu! user `{query}`.", ephemeral=True)
+            await interaction.followup.send(f"Could not find osu! user `{query}`.")
             return
         
         osu_username = str(user.get("username", query))
         db.link_user(interaction.user.id, osu_username)
-        await interaction.response.send_message(f"Linked your Discord to osu! user **{osu_username}**!", ephemeral=True)
+        await interaction.followup.send(f"Linked your Discord to osu! user **{osu_username}**!")
 
     @bot.tree.command(name="unlink", description="Unlink your Discord account from your osu! username")
     async def unlink_command(interaction: discord.Interaction) -> None:
@@ -155,13 +156,13 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
             target_username = linked
         
         try:
-            user = api.fetch_user_by_username(target_username, settings.default_ruleset)
+            user = await bot.loop.run_in_executor(None, api.fetch_user_by_username, target_username, settings.default_ruleset)
         except requests.HTTPError:
             await interaction.followup.send(f"Could not find osu! user `{target_username}`.")
             return
         
         user_id = int(user["id"])
-        scores = api.fetch_recent_scores(user_id, settings.default_ruleset, 1)
+        scores = await bot.loop.run_in_executor(None, api.fetch_recent_scores, user_id, settings.default_ruleset, 1)
         if not scores:
             await interaction.followup.send(f"No recent scores found for **{user.get('username')}**.")
             return
@@ -174,11 +175,11 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
         
         if bid:
             try:
-                max_pp = api.fetch_beatmap_max_pp(bid, settings.default_ruleset, mods or None)
+                max_pp = await bot.loop.run_in_executor(None, api.fetch_beatmap_max_pp, bid, settings.default_ruleset, mods or None)
             except Exception:
                 pass
             try:
-                bm_data = api.fetch_beatmap(bid)
+                bm_data = await bot.loop.run_in_executor(None, api.fetch_beatmap, bid)
                 if bm_data:
                     fc_combo = bm_data.get("max_combo")
             except Exception:
@@ -209,13 +210,13 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
             target_username = linked
         
         try:
-            user = api.fetch_user_by_username(target_username, settings.default_ruleset)
+            user = await bot.loop.run_in_executor(None, api.fetch_user_by_username, target_username, settings.default_ruleset)
         except requests.HTTPError:
             await interaction.followup.send(f"Could not find osu! user `{target_username}`.")
             return
         
         user_id = int(user["id"])
-        scores = api.fetch_recent_scores(user_id, settings.default_ruleset, 50)
+        scores = await bot.loop.run_in_executor(None, api.fetch_recent_scores, user_id, settings.default_ruleset, 50)
         if not scores:
             await interaction.followup.send(f"No recent scores found for **{user.get('username')}**.")
             return
@@ -244,11 +245,11 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
         
         if bid:
             try:
-                max_pp = api.fetch_beatmap_max_pp(bid, settings.default_ruleset, mods or None)
+                max_pp = await bot.loop.run_in_executor(None, api.fetch_beatmap_max_pp, bid, settings.default_ruleset, mods or None)
             except Exception:
                 pass
             try:
-                bm_data = api.fetch_beatmap(bid)
+                bm_data = await bot.loop.run_in_executor(None, api.fetch_beatmap, bid)
                 if bm_data:
                     fc_combo = bm_data.get("max_combo")
             except Exception:
