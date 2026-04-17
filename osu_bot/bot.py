@@ -157,13 +157,13 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
             return
         osu_username = str(user.get("username", username.strip()))
         db.link_user(interaction.user.id, osu_username)
-        await interaction.followup.send(f"your discord has been linked to osu! user `{osu_username}`.")
+        await interaction.followup.send(f"successfully linked osu! user `{osu_username}` to your account.")
 
     @bot.tree.command(name="unlink", description="Unlink your Discord account from your osu! username")
     async def unlink_command(interaction: discord.Interaction) -> None:
         linked = db.get_linked_user(interaction.user.id)
         if not linked:
-            await interaction.response.send_message("You don't have a linked osu! account.", ephemeral=True)
+            await interaction.response.send_message("no osu! account linked.", ephemeral=True)
             return
         db.unlink_user(interaction.user.id)
         await interaction.response.send_message(f"Unlinked from **{linked}**.", ephemeral=True)
@@ -175,7 +175,7 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
         try:
             target = username or db.get_linked_user(interaction.user.id)
             if not target:
-                await interaction.followup.send("no osu! account linked. use `/link <username>` first, or pass a username.")
+                await interaction.followup.send("no osu! account linked.")
                 return
 
             user = await bot.loop.run_in_executor(None, api.fetch_user_by_username, target, settings.default_ruleset)
@@ -202,7 +202,7 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
         try:
             target = username or db.get_linked_user(interaction.user.id)
             if not target:
-                await interaction.followup.send("no osu! account linked. use `/link <username>` first, or pass a username.")
+                await interaction.followup.send("no osu! account linked.")
                 return
 
             user = await bot.loop.run_in_executor(None, api.fetch_user_by_username, target, settings.default_ruleset)
