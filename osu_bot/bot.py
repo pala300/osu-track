@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -12,7 +13,7 @@ from discord.ext import commands
 
 from .config import Settings
 from .db import TrackerDB
-from .embeds import build_recent_play_embed
+from .embeds import build_map_scores_embed, build_recent_play_embed
 from .osu_api import OsuApi
 from .tracker_service import TrackerService, safe_channel_name
 
@@ -150,10 +151,13 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
     @app_commands.describe(username="Your osu! username")
     async def link_command(interaction: discord.Interaction, username: str) -> None:
         await interaction.response.defer(ephemeral=True)
+        if db.get_linked_user(interaction.user.id):
+            await interaction.followup.send("unlink before linking a new osu! user.")
+            return
         try:
             user = await bot.loop.run_in_executor(None, api.fetch_user_by_username, username.strip(), settings.default_ruleset)
         except Exception:
-            await interaction.followup.send(f"Could not find osu! user `{username.strip()}`.")
+            await interaction.followup.send(f"could not find osu! user `{username.strip()}`.")
             return
         osu_username = str(user.get("username", username.strip()))
         db.link_user(interaction.user.id, osu_username)
@@ -166,7 +170,7 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
             await interaction.response.send_message("no osu! account linked.", ephemeral=True)
             return
         db.unlink_user(interaction.user.id)
-        await interaction.response.send_message(f"Unlinked from **{linked}**.", ephemeral=True)
+        await interaction.response.send_message(f"unlinked from **{linked}**.", ephemeral=True)
 
     @bot.tree.command(name="rs", description="Show your most recent score")
     @app_commands.describe(username="osu! username (uses your linked account if omitted)")
@@ -232,6 +236,62 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
             log.exception("Error in /bt command")
             await interaction.followup.send("Something went wrong. Please try again.")
 
+    @bot.tree.command(name="map", description="Show server scores on a beatmap")
+    @app_commands.describe(beatmap="beatmap URL or ID")
+    async def map_command(interaction: discord.Interaction, beatmap: str) -> None:
+        await interaction.response.defer()
+        try:
+            if interaction.guild is None:
+                await interaction.followup.send("use this command in a server.")
+                return
+
+            bid = _parse_beatmap_id(beatmap)
+            if bid is None:
+                await interaction.followup.send("invalid beatmap url or id.")
+                return
+
+            trackers = [t for t in db.list_trackers() if t.guild_id == interaction.guild.id]
+            if not trackers:
+                await interaction.followup.send("no tracked users in this server.")
+                return
+
+            bm_data, max_pp = await asyncio.gather(
+                bot.loop.run_in_executor(None, api.fetch_beatmap, bid),
+                bot.loop.run_in_executor(None, api.fetch_beatmap_max_pp, bid, settings.default_ruleset, None),
+                return_exceptions=True,
+            )
+
+            if not isinstance(bm_data, dict):
+                await interaction.followup.send("could not find that beatmap.")
+                return
+
+            async def get_score(tracker: Any) -> dict[str, Any] | None:
+                try:
+                    score = await bot.loop.run_in_executor(None, api.fetch_user_score_on_beatmap, bid, tracker.user_id, tracker.ruleset)
+                    if score:
+                        return {"username": tracker.username, "score": score}
+                except Exception:
+                    pass
+                return None
+
+            results = await asyncio.gather(*[get_score(t) for t in trackers])
+            entries = sorted(
+                [r for r in results if r is not None],
+                key=lambda e: e["score"].get("pp") or 0,
+                reverse=True,
+            )
+
+            embed = build_map_scores_embed(
+                bm_data,
+                entries,
+                max_pp if isinstance(max_pp, float) else None,
+                settings.default_ruleset,
+            )
+            await interaction.followup.send(embed=embed)
+        except Exception:
+            log.exception("Error in /map command")
+            await interaction.followup.send("something went wrong. please try again.")
+
     @track.error
     @untrack.error
     @tracks.error
@@ -245,6 +305,19 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
         raise error
 
     return bot
+
+
+def _parse_beatmap_id(value: str) -> int | None:
+    value = value.strip()
+    if value.isdigit():
+        return int(value)
+    m = re.search(r'/beatmapsets/\d+#\w+/(\d+)', value)
+    if m:
+        return int(m.group(1))
+    m = re.search(r'/beatmaps/(\d+)', value)
+    if m:
+        return int(m.group(1))
+    return None
 
 
 def _parse_date(ts: str):

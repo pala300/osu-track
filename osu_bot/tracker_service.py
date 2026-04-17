@@ -26,7 +26,7 @@ from .osu_api import OsuApi
 
 log = logging.getLogger(__name__)
 
-SESSION_COOLDOWN = 9 * 60
+SESSION_COOLDOWN = 20 * 60
 
 
 def safe_channel_name(username: str, user_id: int) -> str:

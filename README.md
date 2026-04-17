@@ -19,8 +19,10 @@ https://discord.com/oauth2/authorize?client_id=YOUR_BOT_CLIENT_ID&permissions=68
 
 ### user commands 
 - `/link <username>` - link your discord to your osu username to bypass entering your own [username] in commands.
+- `/unlink` - unlink your discord from your osu account.
 - `/rs [username]` - show user's recently submitted score.
 - `/bt [username]` - show user's highest pp play of the day.
+- `/map <beatmap>` - show all tracked server scores on a beatmap (url or id).
 
 ### admin commands
 - `!track <channel_id> <osu_username_or_id>`

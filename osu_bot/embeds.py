@@ -287,6 +287,58 @@ def build_recovered_embed(user_id: int, ruleset: str, username: str, avatar_url:
     return em
 
 
+def build_map_scores_embed(
+    bm: dict[str, Any],
+    entries: list[dict[str, Any]],
+    max_pp: float | None,
+    ruleset: str,
+) -> discord.Embed:
+    bs = bm.get("beatmapset") or {}
+    artist = html.unescape(bs.get("artist") or "—")
+    title = html.unescape(bs.get("title") or "—")
+    diff = html.unescape(bm.get("version") or "—")
+    stars = bm.get("difficulty_rating")
+    stars_s = f"{stars:.2f}★" if isinstance(stars, (int, float)) else "—"
+    bid = bm.get("id")
+    max_combo = bm.get("max_combo")
+    max_combo_s = f"{max_combo:,}x" if isinstance(max_combo, int) else "—"
+    max_pp_s = f"{max_pp:.0f}pp" if max_pp is not None else "—"
+
+    lines: list[str] = [f"{stars_s} · max combo: {max_combo_s} · max pp: {max_pp_s}\n"]
+
+    if not entries:
+        lines.append("no scores found.")
+    else:
+        for i, entry in enumerate(entries, 1):
+            s = entry["score"]
+            grade = _grade_emoji(str(s.get("rank") or "?"))
+            acc = _acc(s.get("accuracy"))
+            pp = s.get("pp")
+            pp_s = f"{pp:.0f}pp" if pp is not None else "—"
+            combo = s.get("max_combo")
+            combo_s = f"{combo:,}x" if isinstance(combo, int) else "—"
+            total = next((s.get(k) for k in ("total_score", "classic_total_score", "score") if s.get(k)), None)
+            score_s = _num(total)
+            mods = [m.get("acronym") for m in (s.get("mods") or []) if isinstance(m, dict) and m.get("acronym")]
+            mods_s = f" +{''.join(mods)}" if mods else ""
+            lines.append(f"`#{i}` {grade} **{entry['username']}**{mods_s} · {acc} · {pp_s} · {combo_s} · {score_s}")
+
+    em = discord.Embed(
+        title=f"{artist} — {title} [{diff}]",
+        description="\n".join(lines),
+        color=COLOR_EMBED,
+        url=f"https://osu.ppy.sh/beatmaps/{bid}" if bid else None,
+    )
+
+    covers = bs.get("covers") or {}
+    cover = covers.get("list@2x") or covers.get("list")
+    if cover:
+        em.set_thumbnail(url=cover)
+
+    em.set_footer(text=f"osu · map · {ruleset}")
+    return em
+
+
 def build_recent_play_embed(
     score: dict[str, Any],
     user_id: int,
