@@ -307,7 +307,7 @@ def build_recent_play_embed(
 
     pp = score.get("pp")
     if pp is not None and max_pp is not None:
-        pp_s = f"{pp:.2f}/{max_pp:.0f}pp"
+        pp_s = f"{pp:.0f}/{max_pp:.0f}pp"
     elif pp is not None:
         pp_s = f"{pp:.2f}pp"
     else:
