@@ -131,6 +131,16 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
         db.link_user(interaction.user.id, osu_username)
         await interaction.response.send_message(f"Linked your Discord to osu! user **{osu_username}**!", ephemeral=True)
 
+    @bot.tree.command(name="unlink", description="Unlink your Discord account from your osu! username")
+    async def unlink_command(interaction: discord.Interaction) -> None:
+        linked = db.get_linked_user(interaction.user.id)
+        if not linked:
+            await interaction.response.send_message("You don't have a linked osu! account.", ephemeral=True)
+            return
+        
+        db.link_user(interaction.user.id, "")
+        await interaction.response.send_message(f"Unlinked from **{linked}**.", ephemeral=True)
+
     @bot.tree.command(name="rs", description="Show recent score")
     @app_commands.describe(username="osu! username (optional, uses your linked account if not provided)")
     async def rs_command(interaction: discord.Interaction, username: str | None = None) -> None:

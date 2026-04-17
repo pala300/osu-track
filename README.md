@@ -11,11 +11,16 @@ it polls osu api, posts stat changes, recent plays, medal updates, and account s
 4. run:
    `py main.py`
 
-## discord invite
+### discord invite
+replace `YOUR_BOT_CLIENT_ID` with your bot's client ID from discord developer portal
 ```
 https://discord.com/oauth2/authorize?client_id=YOUR_BOT_CLIENT_ID&permissions=68608&scope=bot%20applications.commands
 ```
-(replace `YOUR_BOT_CLIENT_ID` with your bot's client ID from discord developer portal)
+
+### user commands 
+- `/link <username>` - link your discord to your osu username to bypass entering your own [username] in commands.
+- `/rs [username]` - show user's recently submitted score.
+- `/bt [username]` - show user's highest pp play of the day.
 
 ### admin commands
 - `!track <channel_id> <osu_username_or_id>`
@@ -24,7 +29,3 @@ https://discord.com/oauth2/authorize?client_id=YOUR_BOT_CLIENT_ID&permissions=68
 
 when you track someone, the bot renames the channel to `username-id` and sends updates there.
 
-### slash commands (everyone)
-- `/link <username>` - link your discord to your osu username
-- `/rs [username]` - show recent score (yours if linked, or specify username)
-- `/bt [username]` - show best score today (yours if linked, or specify username)
