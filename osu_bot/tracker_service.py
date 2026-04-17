@@ -49,8 +49,7 @@ class TrackerService:
     async def _process_tracker(self, tr: TrackerRow) -> None:
         channel = self.bot.get_channel(tr.channel_id)
         if not isinstance(channel, discord.TextChannel):
-            log.warning("Channel %s missing; deleting tracker.", tr.channel_id)
-            self.db.remove_tracker(tr.channel_id)
+            log.warning("Channel %s not accessible, skipping poll cycle.", tr.channel_id)
             return
         state = self.db.get_state(tr.channel_id)
 
