@@ -4,6 +4,7 @@ import time
 from typing import Any
 
 import requests
+from rosu_pp_py import Beatmap, Calculator
 
 
 class OsuApi:
@@ -81,16 +82,28 @@ class OsuApi:
         return resp.json()
 
     def fetch_beatmap_max_pp(self, beatmap_id: int, ruleset: str, mods: list[str] | None = None) -> float | None:
-        payload: dict[str, Any] = {"ruleset": ruleset}
-        if mods:
-            payload["mods"] = [{"acronym": m} for m in mods]
-        resp = requests.post(
-            f"https://osu.ppy.sh/api/v2/beatmaps/{beatmap_id}/attributes",
-            headers=self._headers(),
-            json=payload,
-            timeout=15,
-        )
-        if resp.status_code != 200:
+        """Calculate max SS pp using rosu-pp."""
+        try:
+            # Fetch .osu file
+            osu_file_url = f"https://osu.ppy.sh/osu/{beatmap_id}"
+            resp = requests.get(osu_file_url, timeout=15)
+            if resp.status_code != 200:
+                return None
+            
+            # Parse beatmap
+            beatmap = Beatmap(content=resp.text)
+            
+            # Map ruleset string to rosu-pp mode
+            mode_map = {"osu": 0, "taiko": 1, "fruits": 2, "mania": 3}
+            mode = mode_map.get(ruleset, 0)
+            
+            # Build calculator with mods
+            calc = Calculator(mode=mode, acc=100.0)
+            if mods:
+                calc = calc.mods(*mods)
+            
+            # Calculate SS pp
+            result = calc.performance(beatmap)
+            return result.pp
+        except Exception:
             return None
-        data = resp.json()
-        return data.get("attributes", {}).get("pp_100") or data.get("attributes", {}).get("max_pp")
