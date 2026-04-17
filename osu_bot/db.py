@@ -140,6 +140,11 @@ class TrackerDB:
             conn.execute("INSERT OR REPLACE INTO user_links (discord_id, osu_username) VALUES (?, ?)", (discord_id, osu_username))
             conn.commit()
 
+    def unlink_user(self, discord_id: int) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("DELETE FROM user_links WHERE discord_id = ?", (discord_id,))
+            conn.commit()
+
     def get_linked_user(self, discord_id: int) -> str | None:
         with sqlite3.connect(self.db_path) as conn:
             row = conn.execute("SELECT osu_username FROM user_links WHERE discord_id = ?", (discord_id,)).fetchone()

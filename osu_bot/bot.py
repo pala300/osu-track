@@ -139,7 +139,7 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
             await interaction.response.send_message("You don't have a linked osu! account.", ephemeral=True)
             return
         
-        db.link_user(interaction.user.id, "")
+        db.unlink_user(interaction.user.id)
         await interaction.response.send_message(f"Unlinked from **{linked}**.", ephemeral=True)
 
     @bot.tree.command(name="rs", description="Show recent score")
@@ -170,12 +170,13 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
         score = scores[0]
         bid = (score.get("beatmap") or {}).get("id")
         mods = [m.get("acronym") for m in (score.get("mods") or []) if isinstance(m, dict)]
+        score_ruleset = (score.get("ruleset_id") and {0: "osu", 1: "taiko", 2: "fruits", 3: "mania"}.get(score["ruleset_id"])) or settings.default_ruleset
         max_pp = None
         fc_combo = None
-        
+
         if bid:
             try:
-                max_pp = await bot.loop.run_in_executor(None, api.fetch_beatmap_max_pp, bid, settings.default_ruleset, mods or None)
+                max_pp = await bot.loop.run_in_executor(None, api.fetch_beatmap_max_pp, bid, score_ruleset, mods or None)
             except Exception:
                 pass
             try:
@@ -188,7 +189,7 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
         embed, view = build_recent_play_embed(
             score,
             user_id,
-            settings.default_ruleset,
+            score_ruleset,
             user.get("username", target_username),
             user.get("avatar_url", ""),
             max_pp=max_pp,
@@ -240,12 +241,13 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
         best_score = max(today_scores, key=lambda s: s.get("pp") or 0)
         bid = (best_score.get("beatmap") or {}).get("id")
         mods = [m.get("acronym") for m in (best_score.get("mods") or []) if isinstance(m, dict)]
+        score_ruleset = (best_score.get("ruleset_id") and {0: "osu", 1: "taiko", 2: "fruits", 3: "mania"}.get(best_score["ruleset_id"])) or settings.default_ruleset
         max_pp = None
         fc_combo = None
-        
+
         if bid:
             try:
-                max_pp = await bot.loop.run_in_executor(None, api.fetch_beatmap_max_pp, bid, settings.default_ruleset, mods or None)
+                max_pp = await bot.loop.run_in_executor(None, api.fetch_beatmap_max_pp, bid, score_ruleset, mods or None)
             except Exception:
                 pass
             try:
@@ -258,7 +260,7 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
         embed, view = build_recent_play_embed(
             best_score,
             user_id,
-            settings.default_ruleset,
+            score_ruleset,
             user.get("username", target_username),
             user.get("avatar_url", ""),
             max_pp=max_pp,

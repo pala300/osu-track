@@ -81,25 +81,30 @@ class OsuApi:
             return None
         return resp.json()
 
+    _MOD_BITS: dict[str, int] = {
+        "NF": 1, "EZ": 2, "HD": 8, "HR": 16, "SD": 32,
+        "DT": 64, "RX": 128, "HT": 256, "NC": 576, "FL": 1024,
+        "SO": 4096, "AP": 8192, "PF": 16384,
+    }
+
     def fetch_beatmap_max_pp(self, beatmap_id: int, ruleset: str, mods: list[str] | None = None) -> float | None:
-        """Calculate max SS pp using rosu-pp."""
         try:
-            osu_file_url = f"https://osu.ppy.sh/osu/{beatmap_id}"
-            resp = requests.get(osu_file_url, timeout=15)
+            resp = requests.get(f"https://osu.ppy.sh/osu/{beatmap_id}", timeout=15)
             if resp.status_code != 200:
                 return None
-            
+
             mode_map = {"osu": 0, "taiko": 1, "fruits": 2, "mania": 3}
             mode = mode_map.get(ruleset, 0)
-            
-            beatmap = Beatmap(content=resp.text)
+
+            beatmap = Beatmap(content=resp.content)
             beatmap.convert(mode)
-            
-            calc = Performance(accuracy=100.0)
+
+            mods_int = 0
             if mods:
-                calc.set_mods(*mods)
-            
-            result = calc.calculate(beatmap)
+                for m in mods:
+                    mods_int |= self._MOD_BITS.get(m.upper(), 0)
+
+            result = Performance(accuracy=100.0, mods=mods_int).calculate(beatmap)
             return result.pp
         except Exception:
             return None
