@@ -4,7 +4,7 @@ import time
 from typing import Any
 
 import requests
-from rosu_pp_py import Beatmap, Performance
+from rosu_pp_py import Beatmap, GameMode, Performance
 
 
 class OsuApi:
@@ -93,8 +93,8 @@ class OsuApi:
             if resp.status_code != 200:
                 return None
 
-            mode_map = {"osu": 0, "taiko": 1, "fruits": 2, "mania": 3}
-            mode = mode_map.get(ruleset, 0)
+            mode_map = {"osu": GameMode.Osu, "taiko": GameMode.Taiko, "fruits": GameMode.Catch, "mania": GameMode.Mania}
+            mode = mode_map.get(ruleset, GameMode.Osu)
 
             beatmap = Beatmap(content=resp.content)
             beatmap.convert(mode)
