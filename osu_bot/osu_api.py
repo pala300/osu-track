@@ -4,7 +4,7 @@ import time
 from typing import Any
 
 import requests
-from rosu_pp_py import Beatmap, Calculator
+from rosu_pp_py import Beatmap, Performance
 
 
 class OsuApi:
@@ -93,17 +93,16 @@ class OsuApi:
             # Parse beatmap
             beatmap = Beatmap(content=resp.text)
             
-            # Map ruleset string to rosu-pp mode
+            # Map ruleset string to mode number
             mode_map = {"osu": 0, "taiko": 1, "fruits": 2, "mania": 3}
             mode = mode_map.get(ruleset, 0)
             
-            # Build calculator with mods
-            calc = Calculator(mode=mode, acc=100.0)
-            if mods:
-                calc = calc.mods(*mods)
-            
             # Calculate SS pp
-            result = calc.performance(beatmap)
+            calc = Performance(accuracy=100.0, mode=mode)
+            if mods:
+                calc.set_mods(*mods)
+            
+            result = calc.calculate(beatmap)
             return result.pp
         except Exception:
             return None
