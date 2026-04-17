@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any
 
 import requests
 from rosu_pp_py import Beatmap, Performance
+
+log = logging.getLogger(__name__)
 
 
 class OsuApi:
@@ -84,14 +87,18 @@ class OsuApi:
     def fetch_beatmap_max_pp(self, beatmap_id: int, ruleset: str, mods: list[str] | None = None) -> float | None:
         """Calculate max SS pp using rosu-pp."""
         try:
+            log.info(f"Fetching max pp for beatmap {beatmap_id}, ruleset {ruleset}, mods {mods}")
+            
             # Fetch .osu file
             osu_file_url = f"https://osu.ppy.sh/osu/{beatmap_id}"
             resp = requests.get(osu_file_url, timeout=15)
             if resp.status_code != 200:
+                log.warning(f"Failed to fetch .osu file: status {resp.status_code}")
                 return None
             
             # Parse beatmap
             beatmap = Beatmap(content=resp.text)
+            log.info(f"Parsed beatmap {beatmap_id}")
             
             # Map ruleset string to mode number
             mode_map = {"osu": 0, "taiko": 1, "fruits": 2, "mania": 3}
@@ -103,6 +110,8 @@ class OsuApi:
                 calc.set_mods(*mods)
             
             result = calc.calculate(beatmap)
+            log.info(f"Calculated max pp for {beatmap_id}: {result.pp}")
             return result.pp
-        except Exception:
+        except Exception as e:
+            log.exception(f"Error calculating max pp for beatmap {beatmap_id}: {e}")
             return None
