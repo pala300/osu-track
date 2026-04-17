@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 
 import discord
 import requests
+from discord import app_commands
 from discord.ext import commands
 
 from .config import Settings
 from .db import TrackerDB
+from .embeds import build_recent_play_embed
 from .osu_api import OsuApi
 from .tracker_service import TrackerService, safe_channel_name
 
@@ -27,6 +30,11 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
     @bot.event
     async def on_ready() -> None:
         log.info("Bot ready as %s (%s)", bot.user, bot.user.id if bot.user else "?")
+        try:
+            synced = await bot.tree.sync()
+            log.info("Synced %d slash commands", len(synced))
+        except Exception as e:
+            log.exception("Failed to sync commands: %s", e)
         bot.loop.create_task(poll_loop())
 
     async def poll_loop() -> None:
@@ -108,6 +116,144 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
             for r in rows
         )
         await ctx.reply(msg)
+
+    @bot.tree.command(name="link", description="Link your Discord account to your osu! username")
+    @app_commands.describe(username="Your osu! username")
+    async def link_command(interaction: discord.Interaction, username: str) -> None:
+        query = username.strip()
+        try:
+            user = api.fetch_user_by_username(query, settings.default_ruleset)
+        except requests.HTTPError:
+            await interaction.response.send_message(f"Could not find osu! user `{query}`.", ephemeral=True)
+            return
+        
+        osu_username = str(user.get("username", query))
+        db.link_user(interaction.user.id, osu_username)
+        await interaction.response.send_message(f"Linked your Discord to osu! user **{osu_username}**!", ephemeral=True)
+
+    @bot.tree.command(name="rs", description="Show recent score")
+    @app_commands.describe(username="osu! username (optional, uses your linked account if not provided)")
+    async def rs_command(interaction: discord.Interaction, username: str | None = None) -> None:
+        await interaction.response.defer()
+        
+        target_username = username
+        if not target_username:
+            linked = db.get_linked_user(interaction.user.id)
+            if not linked:
+                await interaction.followup.send("You haven't linked your osu! account yet. Use `/link <username>` first, or provide a username: `/rs <username>`")
+                return
+            target_username = linked
+        
+        try:
+            user = api.fetch_user_by_username(target_username, settings.default_ruleset)
+        except requests.HTTPError:
+            await interaction.followup.send(f"Could not find osu! user `{target_username}`.")
+            return
+        
+        user_id = int(user["id"])
+        scores = api.fetch_recent_scores(user_id, settings.default_ruleset, 1)
+        if not scores:
+            await interaction.followup.send(f"No recent scores found for **{user.get('username')}**.")
+            return
+        
+        score = scores[0]
+        bid = (score.get("beatmap") or {}).get("id")
+        mods = [m.get("acronym") for m in (score.get("mods") or []) if isinstance(m, dict)]
+        max_pp = None
+        fc_combo = None
+        
+        if bid:
+            try:
+                max_pp = api.fetch_beatmap_max_pp(bid, settings.default_ruleset, mods or None)
+            except Exception:
+                pass
+            try:
+                bm_data = api.fetch_beatmap(bid)
+                if bm_data:
+                    fc_combo = bm_data.get("max_combo")
+            except Exception:
+                pass
+        
+        embed, view = build_recent_play_embed(
+            score,
+            user_id,
+            settings.default_ruleset,
+            user.get("username", target_username),
+            user.get("avatar_url", ""),
+            max_pp=max_pp,
+            fc_combo=fc_combo,
+        )
+        await interaction.followup.send(embed=embed, view=view)
+
+    @bot.tree.command(name="bt", description="Show best score from today")
+    @app_commands.describe(username="osu! username (optional, uses your linked account if not provided)")
+    async def bt_command(interaction: discord.Interaction, username: str | None = None) -> None:
+        await interaction.response.defer()
+        
+        target_username = username
+        if not target_username:
+            linked = db.get_linked_user(interaction.user.id)
+            if not linked:
+                await interaction.followup.send("You haven't linked your osu! account yet. Use `/link <username>` first, or provide a username: `/bt <username>`")
+                return
+            target_username = linked
+        
+        try:
+            user = api.fetch_user_by_username(target_username, settings.default_ruleset)
+        except requests.HTTPError:
+            await interaction.followup.send(f"Could not find osu! user `{target_username}`.")
+            return
+        
+        user_id = int(user["id"])
+        scores = api.fetch_recent_scores(user_id, settings.default_ruleset, 50)
+        if not scores:
+            await interaction.followup.send(f"No recent scores found for **{user.get('username')}**.")
+            return
+        
+        today = datetime.now(timezone.utc).date()
+        today_scores = []
+        for s in scores:
+            ended_str = s.get("ended_at") or s.get("created_at")
+            if ended_str:
+                try:
+                    score_date = datetime.fromisoformat(ended_str.replace("Z", "+00:00")).date()
+                    if score_date == today:
+                        today_scores.append(s)
+                except Exception:
+                    pass
+        
+        if not today_scores:
+            await interaction.followup.send(f"No scores from today found for **{user.get('username')}**.")
+            return
+        
+        best_score = max(today_scores, key=lambda s: s.get("pp") or 0)
+        bid = (best_score.get("beatmap") or {}).get("id")
+        mods = [m.get("acronym") for m in (best_score.get("mods") or []) if isinstance(m, dict)]
+        max_pp = None
+        fc_combo = None
+        
+        if bid:
+            try:
+                max_pp = api.fetch_beatmap_max_pp(bid, settings.default_ruleset, mods or None)
+            except Exception:
+                pass
+            try:
+                bm_data = api.fetch_beatmap(bid)
+                if bm_data:
+                    fc_combo = bm_data.get("max_combo")
+            except Exception:
+                pass
+        
+        embed, view = build_recent_play_embed(
+            best_score,
+            user_id,
+            settings.default_ruleset,
+            user.get("username", target_username),
+            user.get("avatar_url", ""),
+            max_pp=max_pp,
+            fc_combo=fc_combo,
+        )
+        await interaction.followup.send(embed=embed, view=view)
 
     @track.error
     @untrack.error
