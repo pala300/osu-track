@@ -57,7 +57,8 @@ class TrackerDB:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS user_links (
                     discord_id INTEGER PRIMARY KEY,
-                    osu_username TEXT NOT NULL
+                    osu_username TEXT NOT NULL,
+                    osu_user_id INTEGER
                 )
             """)
             conn.commit()
@@ -65,13 +66,16 @@ class TrackerDB:
 
     def _migrate(self) -> None:
         with sqlite3.connect(self.db_path) as conn:
-            cols = {row[1] for row in conn.execute("PRAGMA table_info(state)")}
-            if "last_play_time" not in cols:
+            state_cols = {row[1] for row in conn.execute("PRAGMA table_info(state)")}
+            if "last_play_time" not in state_cols:
                 conn.execute("ALTER TABLE state ADD COLUMN last_play_time REAL")
-            if "pending_snapshot" not in cols:
+            if "pending_snapshot" not in state_cols:
                 conn.execute("ALTER TABLE state ADD COLUMN pending_snapshot TEXT")
-            if "pending_changes" not in cols:
+            if "pending_changes" not in state_cols:
                 conn.execute("ALTER TABLE state ADD COLUMN pending_changes TEXT")
+            link_cols = {row[1] for row in conn.execute("PRAGMA table_info(user_links)")}
+            if "osu_user_id" not in link_cols:
+                conn.execute("ALTER TABLE user_links ADD COLUMN osu_user_id INTEGER")
             conn.commit()
 
     def upsert_tracker(self, guild_id: int, channel_id: int, user_id: int, username: str, ruleset: str) -> None:
@@ -135,10 +139,20 @@ class TrackerDB:
             )
             conn.commit()
 
-    def link_user(self, discord_id: int, osu_username: str) -> None:
+    def link_user(self, discord_id: int, osu_username: str, osu_user_id: int | None = None) -> None:
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute("INSERT OR REPLACE INTO user_links (discord_id, osu_username) VALUES (?, ?)", (discord_id, osu_username))
+            conn.execute(
+                "INSERT OR REPLACE INTO user_links (discord_id, osu_username, osu_user_id) VALUES (?, ?, ?)",
+                (discord_id, osu_username, osu_user_id),
+            )
             conn.commit()
+
+    def list_linked_users(self) -> list[tuple[str, int]]:
+        with sqlite3.connect(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT osu_username, osu_user_id FROM user_links WHERE osu_user_id IS NOT NULL"
+            ).fetchall()
+            return [(row[0], row[1]) for row in rows]
 
     def unlink_user(self, discord_id: int) -> None:
         with sqlite3.connect(self.db_path) as conn:

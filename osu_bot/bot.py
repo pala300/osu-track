@@ -172,7 +172,7 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
             await interaction.followup.send(f"could not find osu! user `{username.strip()}`.")
             return
         osu_username = str(user.get("username", username.strip()))
-        db.link_user(interaction.user.id, osu_username)
+        db.link_user(interaction.user.id, osu_username, int(user["id"]))
         await interaction.followup.send(f"successfully linked osu! user `{osu_username}` to your account.")
 
     @bot.tree.command(name="unlink", description="Unlink your Discord account from your osu! username")
@@ -279,8 +279,18 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
                 return
 
             trackers = [t for t in db.list_trackers() if t.guild_id == interaction.guild.id]
+            tracked_ids = {t.user_id for t in trackers}
+            for uname, uid in db.list_linked_users():
+                if uid not in tracked_ids:
+                    trackers.append(TrackerRow(
+                        guild_id=interaction.guild.id,
+                        channel_id=0,
+                        user_id=uid,
+                        username=uname,
+                        ruleset=settings.default_ruleset,
+                    ))
             if not trackers:
-                await interaction.followup.send("no tracked users in this server.", ephemeral=True)
+                await interaction.followup.send("no tracked or linked users in this server.", ephemeral=True)
                 return
 
             kind, target_id = parsed
