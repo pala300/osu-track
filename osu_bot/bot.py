@@ -13,7 +13,7 @@ from discord.ext import commands
 
 from .config import Settings
 from .db import TrackerDB
-from .embeds import build_beatmapset_scores_embed, build_map_scores_embed, build_recent_play_embed
+from .embeds import build_beatmapset_scores_embed, build_map_scores_embed, build_recent_play_embed, build_top_plays_embed
 from .osu_api import OsuApi
 from .tracker_service import TrackerService, safe_channel_name
 
@@ -248,6 +248,33 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
             log.exception("Error in /bt command")
             await interaction.followup.send("something went wrong. please try again.", ephemeral=True)
 
+    @bot.tree.command(name="top", description="Show your top 5 plays")
+    @app_commands.describe(username="osu! username (uses your linked account if omitted)")
+    async def top_command(interaction: discord.Interaction, username: str | None = None) -> None:
+        await interaction.response.defer()
+        try:
+            target = username or db.get_linked_user(interaction.user.id)
+            if not target:
+                await interaction.followup.send("no osu! account linked.", ephemeral=True)
+                return
+
+            try:
+                user = await bot.loop.run_in_executor(None, api.fetch_user_by_username, target, settings.default_ruleset)
+            except Exception:
+                await interaction.followup.send(f"could not find osu! user `{target}`.", ephemeral=True)
+                return
+
+            scores = await bot.loop.run_in_executor(None, api.fetch_best_scores, int(user["id"]), settings.default_ruleset, 5)
+            if not scores:
+                await interaction.followup.send(f"no top plays found for **{user.get('username')}**.", ephemeral=True)
+                return
+
+            embed = build_top_plays_embed(scores, int(user["id"]), settings.default_ruleset, user.get("username", target), user.get("avatar_url", ""))
+            await interaction.followup.send(embed=embed)
+        except Exception:
+            log.exception("Error in /top command")
+            await interaction.followup.send("something went wrong. please try again.", ephemeral=True)
+
     @bot.tree.command(name="help", description="show available commands")
     async def help_command(interaction: discord.Interaction) -> None:
         def m(name: str) -> str:
@@ -259,6 +286,7 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
             f"{m('unlink')} · unlink your discord from your osu! account",
             f"{m('rs')} `[username]` · show your most recent score",
             f"{m('bt')} `[username]` · show your best score from today",
+            f"{m('top')} `[username]` · show your top 5 plays",
             f"{m('map')} `<beatmap>` · show server scores on a beatmap",
             f"{m('help')} · show this",
         ]

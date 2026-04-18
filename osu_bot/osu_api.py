@@ -95,6 +95,21 @@ class OsuApi:
             return None
         return resp.json()
 
+    def fetch_best_scores(self, user_id: int, ruleset: str, limit: int = 5) -> list[dict[str, Any]]:
+        resp = requests.get(
+            f"https://osu.ppy.sh/api/v2/users/{user_id}/scores/best",
+            params={"mode": ruleset, "limit": max(1, min(limit, 100))},
+            headers=self._headers(),
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict) and isinstance(data.get("scores"), list):
+            return data["scores"]
+        return []
+
     def fetch_beatmapset(self, beatmapset_id: int) -> dict[str, Any] | None:
         resp = requests.get(
             f"https://osu.ppy.sh/api/v2/beatmapsets/{beatmapset_id}",

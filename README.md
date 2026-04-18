@@ -29,6 +29,7 @@ when you track someone, the bot renames the channel to `username-id` and will se
 - `/unlink` - unlink your osu! user from your discord.
 - `/rs [username]` - show user's recently submitted score.
 - `/bt [username]` - show user's highest pp play of the day.
+- `/top [username]` - show user's top 5 plays by pp.
 - `/map <beatmap>` - show all linked/tracked user's scores for the beatmap. can use url or id.
 - `/help` - show all available commands.
 

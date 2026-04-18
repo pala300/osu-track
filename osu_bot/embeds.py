@@ -380,6 +380,49 @@ def build_beatmapset_scores_embed(
     return em
 
 
+def build_top_plays_embed(
+    scores: list[dict[str, Any]],
+    user_id: int,
+    ruleset: str,
+    username: str,
+    avatar_url: str,
+) -> discord.Embed:
+    lines: list[str] = []
+    for i, score in enumerate(scores, 1):
+        bm = score.get("beatmap") or {}
+        bs = score.get("beatmapset") or {}
+        artist = html.unescape(bs.get("artist") or "—")
+        title  = html.unescape(bs.get("title")  or "—")
+        diff   = html.unescape(bm.get("version") or "—")
+        stars  = bm.get("difficulty_rating")
+        stars_s = f"{stars:.2f}★" if isinstance(stars, (int, float)) else "—"
+        bid = bm.get("id")
+        beatmap_url = f"https://osu.ppy.sh/beatmaps/{bid}" if bid else None
+
+        pp    = score.get("pp")
+        pp_s  = f"{pp:.0f}pp" if pp is not None else "—"
+        acc   = _acc(score.get("accuracy"))
+        combo = score.get("max_combo")
+        combo_s = f"{combo:,}x" if isinstance(combo, int) else "—"
+        grade = _grade_emoji(str(score.get("rank") or "?"))
+        mods  = _fmt_mods(score.get("mods"))
+        mods_part = f" · {mods}" if mods != "`—`" else ""
+
+        song = f"[**{artist} — {title}**]({beatmap_url})" if beatmap_url else f"**{artist} — {title}**"
+        lines.append(f"`#{i}` {grade} {song}\n{diff} · {stars_s} · `{pp_s} · {acc} · {combo_s}`{mods_part}")
+
+    em = discord.Embed(
+        title=f"{EMOJI_PP} {username} — top plays",
+        description="\n\n".join(lines),
+        color=COLOR_EMBED,
+        url=f"https://osu.ppy.sh/users/{user_id}/{ruleset}",
+    )
+    if avatar_url:
+        em.set_thumbnail(url=avatar_url)
+    em.set_footer(text=f"osu · top · {ruleset}")
+    return em
+
+
 def build_recent_play_embed(
     score: dict[str, Any],
     user_id: int,
@@ -445,8 +488,8 @@ def build_recent_play_embed(
     em.add_field(name="combo",    value=combo_field,                        inline=True)
     em.add_field(name="\u200b",   value="\u200b",                           inline=True)
 
-    em.add_field(name="score",    value=f"`{total_score_s}`",               inline=True)
     em.add_field(name="mods",     value=_fmt_mods(score.get("mods")),       inline=True)
+    em.add_field(name="score",    value=f"`{total_score_s}`",               inline=True)
     em.add_field(name="\u200b",   value="\u200b",                           inline=True)
 
     hits = (
