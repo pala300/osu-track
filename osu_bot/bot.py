@@ -99,17 +99,17 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
     async def track(ctx: commands.Context, channel_id: int, osu_username: str) -> None:
         channel = bot.get_channel(channel_id) or await bot.fetch_channel(channel_id)
         if not isinstance(channel, discord.TextChannel):
-            await ctx.reply("Channel must be a text channel.")
+            await ctx.reply("channel must be a text channel.")
             return
         if ctx.guild is None or channel.guild.id != ctx.guild.id:
-            await ctx.reply("Channel must be in this server.")
+            await ctx.reply("channel must be in this server.")
             return
         query = osu_username.strip()
         try:
             user = api.fetch_user_by_id(int(query), settings.default_ruleset) if query.isdigit() else api.fetch_user_by_username(query, settings.default_ruleset)
         except requests.HTTPError as e:
             code = getattr(e.response, "status_code", None)
-            await ctx.reply(f"Could not resolve osu user `{query}` (HTTP {code}).")
+            await ctx.reply(f"could not find osu! user `{query}` (http {code}).")
             return
 
         user_id = int(user["id"])
@@ -129,29 +129,29 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
         try:
             await channel.edit(name=new_name, reason=f"Tracking osu user {username}")
         except discord.Forbidden:
-            await ctx.reply(f"Tracking added, but I couldn't rename <#{channel.id}>.")
+            await ctx.reply(f"tracking added, but couldn't rename <#{channel.id}>.")
             return
 
-        await ctx.reply(f"Now tracking `{username}` (`{user_id}`) in <#{channel.id}>.")
+        await ctx.reply(f"now tracking `{username}` (`{user_id}`) in <#{channel.id}>.")
 
     @bot.command(name="untrack")
     @_admin_only()
     async def untrack(ctx: commands.Context, channel_id: int) -> None:
         count = db.remove_tracker(channel_id)
         if count:
-            await ctx.reply(f"Stopped tracking for <#{channel_id}>.")
+            await ctx.reply(f"stopped tracking for <#{channel_id}>.")
         else:
-            await ctx.reply("No tracker found for that channel.")
+            await ctx.reply("no tracker found for that channel.")
 
     @bot.command(name="tracks")
     @_admin_only()
     async def tracks(ctx: commands.Context) -> None:
         if ctx.guild is None:
-            await ctx.reply("Use this in a server.")
+            await ctx.reply("use this in a server.")
             return
         rows = [r for r in db.list_trackers() if r.guild_id == ctx.guild.id]
         if not rows:
-            await ctx.reply("No trackers configured in this server.")
+            await ctx.reply("no trackers configured in this server.")
             return
         msg = "\n".join(
             f"- <#{r.channel_id}> → `{r.username}` (`{r.user_id}`) · `{r.ruleset}`"
@@ -194,7 +194,12 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
                 await interaction.followup.send("no osu! account linked.", ephemeral=True)
                 return
 
-            user = await bot.loop.run_in_executor(None, api.fetch_user_by_username, target, settings.default_ruleset)
+            try:
+                user = await bot.loop.run_in_executor(None, api.fetch_user_by_username, target, settings.default_ruleset)
+            except Exception:
+                await interaction.followup.send(f"could not find osu! user `{target}`.", ephemeral=True)
+                return
+
             scores = await bot.loop.run_in_executor(None, api.fetch_recent_scores, int(user["id"]), settings.default_ruleset, 1)
             if not scores:
                 await interaction.followup.send(f"no recent scores found for **{user.get('username')}**.", ephemeral=True)
@@ -221,7 +226,12 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
                 await interaction.followup.send("no osu! account linked.", ephemeral=True)
                 return
 
-            user = await bot.loop.run_in_executor(None, api.fetch_user_by_username, target, settings.default_ruleset)
+            try:
+                user = await bot.loop.run_in_executor(None, api.fetch_user_by_username, target, settings.default_ruleset)
+            except Exception:
+                await interaction.followup.send(f"could not find osu! user `{target}`.", ephemeral=True)
+                return
+
             scores = await bot.loop.run_in_executor(None, api.fetch_recent_scores, int(user["id"]), settings.default_ruleset, 50)
             if not scores:
                 await interaction.followup.send(f"no recent scores found for **{user.get('username')}**.", ephemeral=True)
@@ -394,10 +404,10 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
     @tracks.error
     async def _admin_error(ctx: commands.Context, error: commands.CommandError) -> None:
         if isinstance(error, commands.CheckFailure):
-            await ctx.reply("Admin only.")
+            await ctx.reply("admin only.")
             return
         if isinstance(error, commands.MissingRequiredArgument):
-            await ctx.reply(f"Usage: `{settings.command_prefix}{ctx.command.name} {ctx.command.signature}`")
+            await ctx.reply(f"usage: `{settings.command_prefix}{ctx.command.name} {ctx.command.signature}`")
             return
         raise error
 
