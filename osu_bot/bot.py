@@ -160,6 +160,8 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
         await ctx.reply(msg)
 
     @bot.tree.command(name="link", description="Link your Discord account to your osu! username")
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     @app_commands.describe(username="Your osu! username")
     async def link_command(interaction: discord.Interaction, username: str) -> None:
         await interaction.response.defer(ephemeral=True)
@@ -176,6 +178,8 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
         await interaction.followup.send(f"successfully linked osu! user `{osu_username}` to your account.")
 
     @bot.tree.command(name="unlink", description="Unlink your Discord account from your osu! username")
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     async def unlink_command(interaction: discord.Interaction) -> None:
         linked = db.get_linked_user(interaction.user.id)
         if not linked:
@@ -185,6 +189,8 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
         await interaction.response.send_message(f"unlinked from **{linked}**.", ephemeral=True)
 
     @bot.tree.command(name="rs", description="Show your most recent score")
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     @app_commands.describe(username="osu! username (uses your linked account if omitted)")
     async def rs_command(interaction: discord.Interaction, username: str | None = None) -> None:
         await interaction.response.defer()
@@ -217,6 +223,8 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
             await interaction.followup.send("something went wrong. please try again.", ephemeral=True)
 
     @bot.tree.command(name="bt", description="Show your best score from today")
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     @app_commands.describe(username="osu! username (uses your linked account if omitted)")
     async def bt_command(interaction: discord.Interaction, username: str | None = None) -> None:
         await interaction.response.defer()
@@ -259,6 +267,8 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
             await interaction.followup.send("something went wrong. please try again.", ephemeral=True)
 
     @bot.tree.command(name="top", description="Show your top 5 plays")
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     @app_commands.describe(username="osu! username (uses your linked account if omitted)")
     async def top_command(interaction: discord.Interaction, username: str | None = None) -> None:
         await interaction.response.defer()
@@ -286,6 +296,8 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
             await interaction.followup.send("something went wrong. please try again.", ephemeral=True)
 
     @bot.tree.command(name="help", description="show available commands")
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     async def help_command(interaction: discord.Interaction) -> None:
         def m(name: str) -> str:
             return command_mentions.get(name, f"`/{name}`")
@@ -303,32 +315,31 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
         await interaction.response.send_message("\n".join(lines), ephemeral=True)
 
     @bot.tree.command(name="map", description="Show server scores on a beatmap")
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
     @app_commands.describe(beatmap="beatmap URL or ID")
     async def map_command(interaction: discord.Interaction, beatmap: str) -> None:
         await interaction.response.defer()
         try:
-            if interaction.guild is None:
-                await interaction.followup.send("use this command in a server.", ephemeral=True)
-                return
-
             parsed = _parse_beatmap_input(beatmap)
             if parsed is None:
                 await interaction.followup.send("invalid beatmap url or id.", ephemeral=True)
                 return
 
-            trackers = [t for t in db.list_trackers() if t.guild_id == interaction.guild.id]
+            guild_id = interaction.guild.id if interaction.guild else None
+            trackers = [t for t in db.list_trackers() if t.guild_id == guild_id] if guild_id else []
             tracked_ids = {t.user_id for t in trackers}
             for uname, uid in db.list_linked_users():
                 if uid not in tracked_ids:
                     trackers.append(TrackerRow(
-                        guild_id=interaction.guild.id,
+                        guild_id=guild_id or 0,
                         channel_id=0,
                         user_id=uid,
                         username=uname,
                         ruleset=settings.default_ruleset,
                     ))
             if not trackers:
-                await interaction.followup.send("no tracked or linked users in this server.", ephemeral=True)
+                await interaction.followup.send("no linked users found.", ephemeral=True)
                 return
 
             kind, target_id = parsed

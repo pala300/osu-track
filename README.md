@@ -17,6 +17,13 @@ replace `YOUR_BOT_CLIENT_ID` with your bot's client ID from discord developer po
 https://discord.com/oauth2/authorize?client_id=YOUR_BOT_CLIENT_ID&permissions=330752&scope=bot%20applications.commands
 ```
 
+### user install
+the bot supports user installs — lets you use slash commands in any server or dm without the bot being added.
+
+to enable: go to your app in the discord developer portal → installation → enable **user install**. once enabled, users can add it from your bot's profile.
+
+`/rs`, `/bt`, `/top`, `/map` all work outside of servers. `/map` in dms shows scores for all linked users.
+
 ### admin commands
 - `!track <channel_id> <osu_username_or_id>`
 - `!untrack <channel_id>`
