@@ -232,7 +232,8 @@ def build_change_embed(user_id: int, ruleset: str, stats: dict[str, Any], change
     if stats.get("_avatar_url"):
         em.set_thumbnail(url=stats["_avatar_url"])
 
-    for ch in changes:
+    _order = list(TRACKED_STATS.keys())
+    for ch in sorted(changes, key=lambda c: _order.index(c["key"]) if c["key"] in _order else len(_order)):
         arrow = EMOJI_UP if ch["improved"] else EMOJI_DOWN
         if ch["key"] == "country_rank":
             label = _country_label(stats)
