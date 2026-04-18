@@ -29,6 +29,9 @@ log = logging.getLogger(__name__)
 
 SESSION_COOLDOWN = 20 * 60
 
+_RULESET_MAP: dict[int, str] = {0: "osu", 1: "taiko", 2: "fruits", 3: "mania"}
+_ALL_RULESETS = list(_RULESET_MAP.values())
+
 
 def safe_channel_name(username: str, user_id: int) -> str:
     slug = re.sub(r"[^a-zA-Z0-9\-]+", "-", username.strip().lower()).strip("-")
@@ -82,7 +85,15 @@ class TrackerService:
         had_new_plays = False
 
         if self.settings.notify_recent_plays:
-            scores = await loop.run_in_executor(None, self.api.fetch_recent_scores, tr.user_id, tr.ruleset, self.settings.recent_scores_limit)
+            fetched = await asyncio.gather(*[
+                loop.run_in_executor(None, self.api.fetch_recent_scores, tr.user_id, rs, self.settings.recent_scores_limit)
+                for rs in _ALL_RULESETS
+            ], return_exceptions=True)
+            scores: list[dict[str, Any]] = []
+            for result in fetched:
+                if isinstance(result, list):
+                    scores.extend(result)
+
             if not recent_ids:
                 recent_ids = [fp for fp in (score_fingerprint(s) for s in scores) if fp][: self.settings.recent_score_id_cap]
             else:
@@ -103,6 +114,7 @@ class TrackerService:
                     had_new_plays = True
                     for s in reversed(fresh):
                         bid = (s.get("beatmap") or {}).get("id")
+                        score_ruleset = _RULESET_MAP.get(s.get("ruleset_id"), tr.ruleset)
                         mods = [m.get("acronym") if isinstance(m, dict) else m
                                 for m in (s.get("mods") or [])
                                 if (isinstance(m, dict) and m.get("acronym")) or (isinstance(m, str) and m)]
@@ -111,7 +123,7 @@ class TrackerService:
 
                         if bid:
                             try:
-                                max_pp = await loop.run_in_executor(None, self.api.fetch_beatmap_max_pp, bid, tr.ruleset, mods or None)
+                                max_pp = await loop.run_in_executor(None, self.api.fetch_beatmap_max_pp, bid, score_ruleset, mods or None)
                             except Exception:
                                 log.debug("Could not fetch max pp for beatmap %s", bid, exc_info=True)
                             try:
@@ -124,7 +136,7 @@ class TrackerService:
                         recent_embed, recent_view = build_recent_play_embed(
                             s,
                             tr.user_id,
-                            tr.ruleset,
+                            score_ruleset,
                             stats["_username"],
                             stats["_avatar_url"],
                             max_pp=max_pp,

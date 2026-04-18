@@ -21,6 +21,13 @@ log = logging.getLogger(__name__)
 
 _RULESET_MAP: dict[int, str] = {0: "osu", 1: "taiko", 2: "fruits", 3: "mania"}
 
+_MODE_CHOICES = [
+    app_commands.Choice(name="osu",   value="osu"),
+    app_commands.Choice(name="taiko", value="taiko"),
+    app_commands.Choice(name="catch", value="fruits"),
+    app_commands.Choice(name="mania", value="mania"),
+]
+
 
 def _score_ruleset(score: dict[str, Any], default: str) -> str:
     return _RULESET_MAP.get(score.get("ruleset_id"), default)
@@ -194,8 +201,9 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
     @bot.tree.command(name="rs", description="Show your most recent score")
     @app_commands.allowed_installs(guilds=True, users=True)
     @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
-    @app_commands.describe(username="osu! username (uses your linked account if omitted)")
-    async def rs_command(interaction: discord.Interaction, username: str | None = None) -> None:
+    @app_commands.describe(username="osu! username (uses your linked account if omitted)", mode="game mode (defaults to server default)")
+    @app_commands.choices(mode=_MODE_CHOICES)
+    async def rs_command(interaction: discord.Interaction, username: str | None = None, mode: app_commands.Choice[str] | None = None) -> None:
         await interaction.response.defer()
         try:
             target = username or db.get_linked_user(interaction.user.id)
@@ -203,23 +211,24 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
                 await interaction.followup.send("no osu! account linked.", ephemeral=True)
                 return
 
+            ruleset = mode.value if mode else settings.default_ruleset
             try:
-                user = await bot.loop.run_in_executor(None, api.fetch_user_by_username, target, settings.default_ruleset)
+                user = await bot.loop.run_in_executor(None, api.fetch_user_by_username, target, ruleset)
             except Exception:
                 await interaction.followup.send(f"could not find osu! user `{target}`.", ephemeral=True)
                 return
 
-            scores = await bot.loop.run_in_executor(None, api.fetch_recent_scores, int(user["id"]), settings.default_ruleset, 1)
+            scores = await bot.loop.run_in_executor(None, api.fetch_recent_scores, int(user["id"]), ruleset, 1)
             if not scores:
                 await interaction.followup.send(f"no recent scores found for **{user.get('username')}**.", ephemeral=True)
                 return
 
             score = scores[0]
             bid = (score.get("beatmap") or {}).get("id")
-            ruleset = _score_ruleset(score, settings.default_ruleset)
-            max_pp, fc_combo = await _fetch_score_extras(bot.loop, api, bid, ruleset, _mods(score)) if bid else (None, None)
+            score_ruleset = _score_ruleset(score, ruleset)
+            max_pp, fc_combo = await _fetch_score_extras(bot.loop, api, bid, score_ruleset, _mods(score)) if bid else (None, None)
 
-            embed, view = build_recent_play_embed(score, int(user["id"]), ruleset, user.get("username", target), user.get("avatar_url", ""), max_pp=max_pp, fc_combo=fc_combo)
+            embed, view = build_recent_play_embed(score, int(user["id"]), score_ruleset, user.get("username", target), user.get("avatar_url", ""), max_pp=max_pp, fc_combo=fc_combo)
             await interaction.followup.send(embed=embed, view=view)
         except Exception:
             log.exception("Error in /rs command")
@@ -228,8 +237,9 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
     @bot.tree.command(name="bt", description="Show your best score from today")
     @app_commands.allowed_installs(guilds=True, users=True)
     @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
-    @app_commands.describe(username="osu! username (uses your linked account if omitted)")
-    async def bt_command(interaction: discord.Interaction, username: str | None = None) -> None:
+    @app_commands.describe(username="osu! username (uses your linked account if omitted)", mode="game mode (defaults to server default)")
+    @app_commands.choices(mode=_MODE_CHOICES)
+    async def bt_command(interaction: discord.Interaction, username: str | None = None, mode: app_commands.Choice[str] | None = None) -> None:
         await interaction.response.defer()
         try:
             target = username or db.get_linked_user(interaction.user.id)
@@ -237,13 +247,14 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
                 await interaction.followup.send("no osu! account linked.", ephemeral=True)
                 return
 
+            ruleset = mode.value if mode else settings.default_ruleset
             try:
-                user = await bot.loop.run_in_executor(None, api.fetch_user_by_username, target, settings.default_ruleset)
+                user = await bot.loop.run_in_executor(None, api.fetch_user_by_username, target, ruleset)
             except Exception:
                 await interaction.followup.send(f"could not find osu! user `{target}`.", ephemeral=True)
                 return
 
-            scores = await bot.loop.run_in_executor(None, api.fetch_recent_scores, int(user["id"]), settings.default_ruleset, 50)
+            scores = await bot.loop.run_in_executor(None, api.fetch_recent_scores, int(user["id"]), ruleset, 50)
             if not scores:
                 await interaction.followup.send(f"no recent scores found for **{user.get('username')}**.", ephemeral=True)
                 return
@@ -260,10 +271,10 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
 
             score = max(today_scores, key=lambda s: s.get("pp") or 0)
             bid = (score.get("beatmap") or {}).get("id")
-            ruleset = _score_ruleset(score, settings.default_ruleset)
-            max_pp, fc_combo = await _fetch_score_extras(bot.loop, api, bid, ruleset, _mods(score)) if bid else (None, None)
+            score_ruleset = _score_ruleset(score, ruleset)
+            max_pp, fc_combo = await _fetch_score_extras(bot.loop, api, bid, score_ruleset, _mods(score)) if bid else (None, None)
 
-            embed, view = build_recent_play_embed(score, int(user["id"]), ruleset, user.get("username", target), user.get("avatar_url", ""), max_pp=max_pp, fc_combo=fc_combo)
+            embed, view = build_recent_play_embed(score, int(user["id"]), score_ruleset, user.get("username", target), user.get("avatar_url", ""), max_pp=max_pp, fc_combo=fc_combo)
             await interaction.followup.send(embed=embed, view=view)
         except Exception:
             log.exception("Error in /bt command")
@@ -272,8 +283,9 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
     @bot.tree.command(name="top", description="Show your top 5 plays")
     @app_commands.allowed_installs(guilds=True, users=True)
     @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
-    @app_commands.describe(username="osu! username (uses your linked account if omitted)")
-    async def top_command(interaction: discord.Interaction, username: str | None = None) -> None:
+    @app_commands.describe(username="osu! username (uses your linked account if omitted)", mode="game mode (defaults to server default)")
+    @app_commands.choices(mode=_MODE_CHOICES)
+    async def top_command(interaction: discord.Interaction, username: str | None = None, mode: app_commands.Choice[str] | None = None) -> None:
         await interaction.response.defer()
         try:
             target = username or db.get_linked_user(interaction.user.id)
@@ -281,18 +293,19 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
                 await interaction.followup.send("no osu! account linked.", ephemeral=True)
                 return
 
+            ruleset = mode.value if mode else settings.default_ruleset
             try:
-                user = await bot.loop.run_in_executor(None, api.fetch_user_by_username, target, settings.default_ruleset)
+                user = await bot.loop.run_in_executor(None, api.fetch_user_by_username, target, ruleset)
             except Exception:
                 await interaction.followup.send(f"could not find osu! user `{target}`.", ephemeral=True)
                 return
 
-            scores = await bot.loop.run_in_executor(None, api.fetch_best_scores, int(user["id"]), settings.default_ruleset, 5)
+            scores = await bot.loop.run_in_executor(None, api.fetch_best_scores, int(user["id"]), ruleset, 5)
             if not scores:
                 await interaction.followup.send(f"no top plays found for **{user.get('username')}**.", ephemeral=True)
                 return
 
-            embed = build_top_plays_embed(scores, int(user["id"]), settings.default_ruleset, user.get("username", target), user.get("avatar_url", ""))
+            embed = build_top_plays_embed(scores, int(user["id"]), ruleset, user.get("username", target), user.get("avatar_url", ""))
             await interaction.followup.send(embed=embed)
         except Exception:
             log.exception("Error in /top command")

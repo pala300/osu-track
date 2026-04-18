@@ -1,7 +1,5 @@
 # osu!track
-lite discord bot for tracking osu profiles in server channels.
-
-it polls osu api, posts stat changes, recent plays, medal updates, and account status alerts.
+discord bot for tracking osu! profiles in server channels. also allows discord user app integration.
 
 ## setup
 1. copy `.env.example` to `.env`
@@ -27,15 +25,8 @@ when you track someone, the bot renames the channel to `username-id` and will se
 ### user commands
 - `/link <username>` - link your osu! user to discord to bypass typing [username] for self-targetting commands.
 - `/unlink` - unlink your osu! user from your discord.
-- `/rs [username]` - show user's recently submitted score.
-- `/bt [username]` - show user's highest pp play of the day.
-- `/top [username]` - show user's top 5 plays by pp.
+- `/rs [username] [mode]` - show user's recently submitted score. mode defaults to server default.
+- `/bt [username] [mode]` - show user's highest pp play of the day.
+- `/top [username] [mode]` - show user's top 5 plays by pp.
 - `/map <beatmap>` - show all linked/tracked user's scores for the beatmap. can use url or id.
 - `/help` - show all available commands.
-
-### user install
-supports user installs so you can use commands in any server or dm without the bot being in it.
-
-to enable: discord developer portal, your app, installation, enable user install. once on, users can add it from the bot's profile.
-
-`/map` in dms shows scores for all linked users.

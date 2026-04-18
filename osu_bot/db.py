@@ -163,3 +163,4 @@ class TrackerDB:
         with sqlite3.connect(self.db_path) as conn:
             row = conn.execute("SELECT osu_username FROM user_links WHERE discord_id = ?", (discord_id,)).fetchone()
             return row[0] if row else None
+
