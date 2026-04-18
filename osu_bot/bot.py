@@ -13,7 +13,7 @@ from discord.ext import commands
 
 from .config import Settings
 from .db import TrackerDB
-from .embeds import build_map_scores_embed, build_recent_play_embed
+from .embeds import build_beatmapset_scores_embed, build_map_scores_embed, build_recent_play_embed
 from .osu_api import OsuApi
 from .tracker_service import TrackerService, safe_channel_name
 
@@ -183,13 +183,13 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
         try:
             target = username or db.get_linked_user(interaction.user.id)
             if not target:
-                await interaction.followup.send("no osu! account linked.")
+                await interaction.followup.send("no osu! account linked.", ephemeral=True)
                 return
 
             user = await bot.loop.run_in_executor(None, api.fetch_user_by_username, target, settings.default_ruleset)
             scores = await bot.loop.run_in_executor(None, api.fetch_recent_scores, int(user["id"]), settings.default_ruleset, 1)
             if not scores:
-                await interaction.followup.send(f"No recent scores found for **{user.get('username')}**.")
+                await interaction.followup.send(f"no recent scores found for **{user.get('username')}**.", ephemeral=True)
                 return
 
             score = scores[0]
@@ -201,7 +201,7 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
             await interaction.followup.send(embed=embed, view=view)
         except Exception:
             log.exception("Error in /rs command")
-            await interaction.followup.send("Something went wrong. Please try again.")
+            await interaction.followup.send("something went wrong. please try again.", ephemeral=True)
 
     @bot.tree.command(name="bt", description="Show your best score from today")
     @app_commands.describe(username="osu! username (uses your linked account if omitted)")
@@ -210,13 +210,13 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
         try:
             target = username or db.get_linked_user(interaction.user.id)
             if not target:
-                await interaction.followup.send("no osu! account linked.")
+                await interaction.followup.send("no osu! account linked.", ephemeral=True)
                 return
 
             user = await bot.loop.run_in_executor(None, api.fetch_user_by_username, target, settings.default_ruleset)
             scores = await bot.loop.run_in_executor(None, api.fetch_recent_scores, int(user["id"]), settings.default_ruleset, 50)
             if not scores:
-                await interaction.followup.send(f"No recent scores found for **{user.get('username')}**.")
+                await interaction.followup.send(f"no recent scores found for **{user.get('username')}**.", ephemeral=True)
                 return
 
             today = datetime.now(timezone.utc).date()
@@ -226,7 +226,7 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
                 and _parse_date(ts) == today
             ]
             if not today_scores:
-                await interaction.followup.send(f"No scores from today for **{user.get('username')}**.")
+                await interaction.followup.send(f"no scores from today for **{user.get('username')}**.", ephemeral=True)
                 return
 
             score = max(today_scores, key=lambda s: s.get("pp") or 0)
@@ -238,7 +238,7 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
             await interaction.followup.send(embed=embed, view=view)
         except Exception:
             log.exception("Error in /bt command")
-            await interaction.followup.send("Something went wrong. Please try again.")
+            await interaction.followup.send("something went wrong. please try again.", ephemeral=True)
 
     @bot.tree.command(name="help", description="show available commands")
     async def help_command(interaction: discord.Interaction) -> None:
@@ -247,12 +247,12 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
 
         lines = [
             "available commands:\n",
-            f"{m('link')} `<username>` — link your discord to your osu! account",
-            f"{m('unlink')} — unlink your discord from your osu! account",
-            f"{m('rs')} `[username]` — show your most recent score",
-            f"{m('bt')} `[username]` — show your best score from today",
-            f"{m('map')} `<beatmap>` — show server scores on a beatmap",
-            f"{m('help')} — show this",
+            f"{m('link')} `<username>` · link your discord to your osu! account",
+            f"{m('unlink')} · unlink your discord from your osu! account",
+            f"{m('rs')} `[username]` · show your most recent score",
+            f"{m('bt')} `[username]` · show your best score from today",
+            f"{m('map')} `<beatmap>` · show server scores on a beatmap",
+            f"{m('help')} · show this",
         ]
         await interaction.response.send_message("\n".join(lines), ephemeral=True)
 
@@ -262,55 +262,76 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
         await interaction.response.defer()
         try:
             if interaction.guild is None:
-                await interaction.followup.send("use this command in a server.")
+                await interaction.followup.send("use this command in a server.", ephemeral=True)
                 return
 
-            bid = _parse_beatmap_id(beatmap)
-            if bid is None:
-                await interaction.followup.send("invalid beatmap url or id.")
+            parsed = _parse_beatmap_input(beatmap)
+            if parsed is None:
+                await interaction.followup.send("invalid beatmap url or id.", ephemeral=True)
                 return
 
             trackers = [t for t in db.list_trackers() if t.guild_id == interaction.guild.id]
             if not trackers:
-                await interaction.followup.send("no tracked users in this server.")
+                await interaction.followup.send("no tracked users in this server.", ephemeral=True)
                 return
 
-            bm_data, max_pp = await asyncio.gather(
-                bot.loop.run_in_executor(None, api.fetch_beatmap, bid),
-                bot.loop.run_in_executor(None, api.fetch_beatmap_max_pp, bid, settings.default_ruleset, None),
-                return_exceptions=True,
-            )
+            kind, target_id = parsed
 
-            if not isinstance(bm_data, dict):
-                await interaction.followup.send("could not find that beatmap.")
-                return
-
-            async def get_score(tracker: Any) -> dict[str, Any] | None:
+            async def get_score_on(bm_id: int, tracker: Any) -> dict[str, Any] | None:
                 try:
-                    score = await bot.loop.run_in_executor(None, api.fetch_user_score_on_beatmap, bid, tracker.user_id, tracker.ruleset)
+                    score = await bot.loop.run_in_executor(None, api.fetch_user_score_on_beatmap, bm_id, tracker.user_id, tracker.ruleset)
                     if score:
                         return {"username": tracker.username, "score": score}
                 except Exception:
                     pass
                 return None
 
-            results = await asyncio.gather(*[get_score(t) for t in trackers])
-            entries = sorted(
-                [r for r in results if r is not None],
-                key=lambda e: e["score"].get("pp") or 0,
-                reverse=True,
-            )
+            if kind == "beatmap":
+                bm_data, max_pp = await asyncio.gather(
+                    bot.loop.run_in_executor(None, api.fetch_beatmap, target_id),
+                    bot.loop.run_in_executor(None, api.fetch_beatmap_max_pp, target_id, settings.default_ruleset, None),
+                    return_exceptions=True,
+                )
+                if not isinstance(bm_data, dict):
+                    await interaction.followup.send("could not find that beatmap.", ephemeral=True)
+                    return
+                results = await asyncio.gather(*[get_score_on(target_id, t) for t in trackers])
+                entries = _rank_entries(results)
+                embed = build_map_scores_embed(
+                    bm_data,
+                    entries,
+                    max_pp if isinstance(max_pp, float) else None,
+                    settings.default_ruleset,
+                )
+                await interaction.followup.send(embed=embed)
 
-            embed = build_map_scores_embed(
-                bm_data,
-                entries,
-                max_pp if isinstance(max_pp, float) else None,
-                settings.default_ruleset,
-            )
-            await interaction.followup.send(embed=embed)
+            else:
+                bs_data = await bot.loop.run_in_executor(None, api.fetch_beatmapset, target_id)
+                if not isinstance(bs_data, dict):
+                    await interaction.followup.send("could not find that beatmapset.", ephemeral=True)
+                    return
+                beatmaps = sorted(
+                    [b for b in (bs_data.get("beatmaps") or []) if isinstance(b, dict) and b.get("id")],
+                    key=lambda b: b.get("difficulty_rating") or 0,
+                )
+                n = len(trackers)
+                all_results = await asyncio.gather(*[
+                    get_score_on(bm["id"], t) for bm in beatmaps for t in trackers
+                ])
+                diff_results: list[dict[str, Any]] = []
+                for i, bm in enumerate(beatmaps):
+                    entries = _rank_entries(all_results[i * n:(i + 1) * n])
+                    if entries:
+                        diff_results.append({"beatmap": bm, "entries": entries})
+                if not diff_results:
+                    await interaction.followup.send("no scores found for any difficulty.", ephemeral=True)
+                    return
+                embed = build_beatmapset_scores_embed(bs_data, diff_results, settings.default_ruleset)
+                await interaction.followup.send(embed=embed)
+
         except Exception:
             log.exception("Error in /map command")
-            await interaction.followup.send("something went wrong. please try again.")
+            await interaction.followup.send("something went wrong. please try again.", ephemeral=True)
 
     @track.error
     @untrack.error
@@ -327,16 +348,27 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
     return bot
 
 
-def _parse_beatmap_id(value: str) -> int | None:
+def _rank_entries(results: Any) -> list[dict[str, Any]]:
+    return sorted(
+        (r for r in results if r is not None),
+        key=lambda e: e["score"].get("pp") or 0,
+        reverse=True,
+    )
+
+
+def _parse_beatmap_input(value: str) -> tuple[str, int] | None:
     value = value.strip()
     if value.isdigit():
-        return int(value)
+        return ("beatmap", int(value))
     m = re.search(r'/beatmapsets/\d+#\w+/(\d+)', value)
     if m:
-        return int(m.group(1))
+        return ("beatmap", int(m.group(1)))
     m = re.search(r'/beatmaps/(\d+)', value)
     if m:
-        return int(m.group(1))
+        return ("beatmap", int(m.group(1)))
+    m = re.search(r'/beatmapsets/(\d+)', value)
+    if m:
+        return ("beatmapset", int(m.group(1)))
     return None
 
 

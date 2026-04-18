@@ -93,6 +93,16 @@ class OsuApi:
             return None
         return resp.json()
 
+    def fetch_beatmapset(self, beatmapset_id: int) -> dict[str, Any] | None:
+        resp = requests.get(
+            f"https://osu.ppy.sh/api/v2/beatmapsets/{beatmapset_id}",
+            headers=self._headers(),
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            return None
+        return resp.json()
+
     _MOD_BITS: dict[str, int] = {
         "NF": 1, "EZ": 2, "HD": 8, "HR": 16, "SD": 32,
         "DT": 64, "RX": 128, "HT": 256, "NC": 576, "FL": 1024,

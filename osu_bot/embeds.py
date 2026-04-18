@@ -287,6 +287,23 @@ def build_recovered_embed(user_id: int, ruleset: str, username: str, avatar_url:
     return em
 
 
+def _format_score_line(i: int, entry: dict[str, Any], include_score: bool = True) -> str:
+    s = entry["score"]
+    grade = _grade_emoji(str(s.get("rank") or "?"))
+    acc = _acc(s.get("accuracy"))
+    pp = s.get("pp")
+    pp_s = f"{pp:.0f}pp" if pp is not None else "—"
+    combo = s.get("max_combo")
+    combo_s = f"{combo:,}x" if isinstance(combo, int) else "—"
+    mods = [m.get("acronym") for m in (s.get("mods") or []) if isinstance(m, dict) and m.get("acronym")]
+    mods_s = f" +{''.join(mods)}" if mods else ""
+    line = f"`#{i}` {grade} **{entry['username']}**{mods_s} · {acc} · {pp_s} · {combo_s}"
+    if include_score:
+        total = next((s.get(k) for k in ("total_score", "classic_total_score", "score") if s.get(k)), None)
+        line += f" · {_num(total)}"
+    return line
+
+
 def build_map_scores_embed(
     bm: dict[str, Any],
     entries: list[dict[str, Any]],
@@ -305,23 +322,10 @@ def build_map_scores_embed(
     max_pp_s = f"{max_pp:.0f}pp" if max_pp is not None else "—"
 
     lines: list[str] = [f"{stars_s} · max combo: {max_combo_s} · max pp: {max_pp_s}\n"]
-
     if not entries:
         lines.append("no scores found.")
     else:
-        for i, entry in enumerate(entries, 1):
-            s = entry["score"]
-            grade = _grade_emoji(str(s.get("rank") or "?"))
-            acc = _acc(s.get("accuracy"))
-            pp = s.get("pp")
-            pp_s = f"{pp:.0f}pp" if pp is not None else "—"
-            combo = s.get("max_combo")
-            combo_s = f"{combo:,}x" if isinstance(combo, int) else "—"
-            total = next((s.get(k) for k in ("total_score", "classic_total_score", "score") if s.get(k)), None)
-            score_s = _num(total)
-            mods = [m.get("acronym") for m in (s.get("mods") or []) if isinstance(m, dict) and m.get("acronym")]
-            mods_s = f" +{''.join(mods)}" if mods else ""
-            lines.append(f"`#{i}` {grade} **{entry['username']}**{mods_s} · {acc} · {pp_s} · {combo_s} · {score_s}")
+        lines.extend(_format_score_line(i, e) for i, e in enumerate(entries, 1))
 
     em = discord.Embed(
         title=f"{artist} — {title} [{diff}]",
@@ -329,12 +333,47 @@ def build_map_scores_embed(
         color=COLOR_EMBED,
         url=f"https://osu.ppy.sh/beatmaps/{bid}" if bid else None,
     )
-
     covers = bs.get("covers") or {}
     cover = covers.get("list@2x") or covers.get("list")
     if cover:
         em.set_thumbnail(url=cover)
+    em.set_footer(text=f"osu · map · {ruleset}")
+    return em
 
+
+def build_beatmapset_scores_embed(
+    bs: dict[str, Any],
+    diffs: list[dict[str, Any]],
+    ruleset: str,
+) -> discord.Embed:
+    artist = html.unescape(bs.get("artist") or "—")
+    title = html.unescape(bs.get("title") or "—")
+    bsid = bs.get("id")
+
+    sections: list[str] = []
+    for d in diffs:
+        bm = d["beatmap"]
+        diff_name = html.unescape(bm.get("version") or "—")
+        stars = bm.get("difficulty_rating")
+        stars_s = f"{stars:.2f}★" if isinstance(stars, (int, float)) else "—"
+        lines = [f"**[{diff_name}] · {stars_s}**"]
+        lines.extend(_format_score_line(i, e, include_score=False) for i, e in enumerate(d["entries"], 1))
+        sections.append("\n".join(lines))
+
+    description = "\n\n".join(sections)
+    if len(description) > 4096:
+        description = description[:4090] + "\n…"
+
+    em = discord.Embed(
+        title=f"{artist} — {title}",
+        description=description,
+        color=COLOR_EMBED,
+        url=f"https://osu.ppy.sh/beatmapsets/{bsid}" if bsid else None,
+    )
+    covers = bs.get("covers") or {}
+    cover = covers.get("list@2x") or covers.get("list")
+    if cover:
+        em.set_thumbnail(url=cover)
     em.set_footer(text=f"osu · map · {ruleset}")
     return em
 
@@ -386,11 +425,14 @@ def build_recent_play_embed(
     score_link  = _score_link(score, ruleset)
     replay_link = f"{score_link}/download" if score_link and score.get("has_replay") else None
 
+    beatmap_url = f"https://osu.ppy.sh/beatmaps/{bid}" if bid else None
+    song_text = f"[**{artist} — {title}**]({beatmap_url})" if beatmap_url else f"**{artist} — {title}**"
+
     em = discord.Embed(
         title=f"{EMOJI_PP} {username}",
-        description=f"**{artist} — {title}**\n{diff} · {stars_s} · {ruleset}",
+        description=f"{song_text}\n{diff} · {stars_s} · {ruleset}",
         color=COLOR_EMBED,
-        url=score_link or (f"https://osu.ppy.sh/beatmaps/{bid}" if bid else f"https://osu.ppy.sh/users/{user_id}/{ruleset}"),
+        url=score_link or beatmap_url or f"https://osu.ppy.sh/users/{user_id}/{ruleset}",
     )
 
     em.add_field(name="pp",       value=f"`{pp_s}`",                        inline=True)

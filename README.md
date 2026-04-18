@@ -17,18 +17,18 @@ replace `YOUR_BOT_CLIENT_ID` with your bot's client ID from discord developer po
 https://discord.com/oauth2/authorize?client_id=YOUR_BOT_CLIENT_ID&permissions=68608&scope=bot%20applications.commands
 ```
 
-### user commands 
-- `/link <username>` - link your discord to your osu username to bypass entering your own [username] in commands.
-- `/unlink` - unlink your discord from your osu account.
-- `/rs [username]` - show user's recently submitted score.
-- `/bt [username]` - show user's highest pp play of the day.
-- `/map <beatmap>` - show all tracked server scores on a beatmap (url or id).
-- `/help` - show available commands.
-
 ### admin commands
 - `!track <channel_id> <osu_username_or_id>`
 - `!untrack <channel_id>`
-- `!tracks`
+- `!tracks` 
 
-when you track someone, the bot renames the channel to `username-id` and sends updates there.
+when you track someone, the bot renames the channel to `username-id` and will send updates there.
+
+### user commands 
+- `/link <username>` - link your osu! user to discord to bypass typing [username] for self-targetting commands.
+- `/unlink` - unlink your osu! user from your discord.
+- `/rs [username]` - show user's recently submitted score.
+- `/bt [username]` - show user's highest pp play of the day.
+- `/map <beatmap>` - show all linked/tracked user's scores for the beatmap. can use url or id.
+- `/help` - show all available commands.
 
