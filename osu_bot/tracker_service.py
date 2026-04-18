@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import time
@@ -52,9 +53,10 @@ class TrackerService:
             log.warning("Channel %s not accessible, skipping poll cycle.", tr.channel_id)
             return
         state = self.db.get_state(tr.channel_id)
+        loop = asyncio.get_running_loop()
 
         try:
-            user = self.api.fetch_user_by_id(tr.user_id, tr.ruleset)
+            user = await loop.run_in_executor(None, self.api.fetch_user_by_id, tr.user_id, tr.ruleset)
         except requests.HTTPError as e:
             code = getattr(e.response, "status_code", None)
             if code == 404:
@@ -80,7 +82,7 @@ class TrackerService:
         had_new_plays = False
 
         if self.settings.notify_recent_plays:
-            scores = self.api.fetch_recent_scores(tr.user_id, tr.ruleset, self.settings.recent_scores_limit)
+            scores = await loop.run_in_executor(None, self.api.fetch_recent_scores, tr.user_id, tr.ruleset, self.settings.recent_scores_limit)
             if not recent_ids:
                 recent_ids = [fp for fp in (score_fingerprint(s) for s in scores) if fp][: self.settings.recent_score_id_cap]
             else:
@@ -109,11 +111,11 @@ class TrackerService:
 
                         if bid:
                             try:
-                                max_pp = self.api.fetch_beatmap_max_pp(bid, tr.ruleset, mods or None)
+                                max_pp = await loop.run_in_executor(None, self.api.fetch_beatmap_max_pp, bid, tr.ruleset, mods or None)
                             except Exception:
                                 log.debug("Could not fetch max pp for beatmap %s", bid, exc_info=True)
                             try:
-                                bm_data = self.api.fetch_beatmap(bid)
+                                bm_data = await loop.run_in_executor(None, self.api.fetch_beatmap, bid)
                                 if bm_data:
                                     fc_combo = bm_data.get("max_combo")
                             except Exception:

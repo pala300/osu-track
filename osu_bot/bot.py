@@ -66,9 +66,11 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
     service = TrackerService(bot, settings, db, api)
 
     command_mentions: dict[str, str] = {}
+    _poll_task: asyncio.Task | None = None
 
     @bot.event
     async def on_ready() -> None:
+        nonlocal _poll_task
         log.info("Bot ready as %s (%s)", bot.user, bot.user.id if bot.user else "?")
         try:
             synced = await bot.tree.sync()
@@ -77,7 +79,8 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
                 command_mentions[cmd.name] = cmd.mention
         except Exception as e:
             log.exception("Failed to sync commands: %s", e)
-        bot.loop.create_task(poll_loop())
+        if _poll_task is None or _poll_task.done():
+            _poll_task = bot.loop.create_task(poll_loop())
 
     async def poll_loop() -> None:
         await bot.wait_until_ready()
@@ -106,7 +109,7 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
             return
         query = osu_username.strip()
         try:
-            user = api.fetch_user_by_id(int(query), settings.default_ruleset) if query.isdigit() else api.fetch_user_by_username(query, settings.default_ruleset)
+            user = await bot.loop.run_in_executor(None, api.fetch_user_by_id, int(query), settings.default_ruleset) if query.isdigit() else await bot.loop.run_in_executor(None, api.fetch_user_by_username, query, settings.default_ruleset)
         except requests.HTTPError as e:
             code = getattr(e.response, "status_code", None)
             await ctx.reply(f"could not find osu! user `{query}` (http {code}).")
