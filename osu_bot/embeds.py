@@ -357,7 +357,7 @@ def build_beatmapset_scores_embed(
         stars = bm.get("difficulty_rating")
         stars_s = f"{stars:.2f}★" if isinstance(stars, (int, float)) else "—"
         max_combo = bm.get("max_combo")
-        max_combo_s = f" · max {max_combo:,}x" if isinstance(max_combo, int) else ""
+        max_combo_s = f" · {max_combo:,}x" if isinstance(max_combo, int) else ""
         lines = [f"**[{diff_name}] · {stars_s}{max_combo_s}**"]
         lines.extend(_format_score_line(i, e, include_score=False) for i, e in enumerate(d["entries"], 1))
         sections.append("\n".join(lines))
