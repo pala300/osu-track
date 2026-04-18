@@ -73,15 +73,17 @@ class OsuApi:
 
     def fetch_user_score_on_beatmap(self, beatmap_id: int, user_id: int, ruleset: str) -> dict[str, Any] | None:
         resp = requests.get(
-            f"https://osu.ppy.sh/api/v2/beatmaps/{beatmap_id}/scores/users/{user_id}",
+            f"https://osu.ppy.sh/api/v2/beatmaps/{beatmap_id}/scores/users/{user_id}/all",
             params={"mode": ruleset},
             headers=self._headers(),
             timeout=15,
         )
         if resp.status_code != 200:
             return None
-        data = resp.json()
-        return data.get("score") or data
+        scores = (resp.json().get("scores") or [])
+        if not scores:
+            return None
+        return max(scores, key=lambda s: s.get("pp") or 0)
 
     def fetch_beatmap(self, beatmap_id: int) -> dict[str, Any] | None:
         resp = requests.get(

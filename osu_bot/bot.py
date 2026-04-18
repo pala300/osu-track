@@ -311,7 +311,8 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
                     await interaction.followup.send("could not find that beatmapset.", ephemeral=True)
                     return
                 beatmaps = sorted(
-                    [b for b in (bs_data.get("beatmaps") or []) if isinstance(b, dict) and b.get("id")],
+                    [b for b in (bs_data.get("beatmaps") or [])
+                     if isinstance(b, dict) and b.get("id") and b.get("mode") == settings.default_ruleset],
                     key=lambda b: b.get("difficulty_rating") or 0,
                 )
                 n = len(trackers)
