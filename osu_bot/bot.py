@@ -27,7 +27,15 @@ def _score_ruleset(score: dict[str, Any], default: str) -> str:
 
 
 def _mods(score: dict[str, Any]) -> list[str]:
-    return [m.get("acronym") for m in (score.get("mods") or []) if isinstance(m, dict)]
+    out = []
+    for m in (score.get("mods") or []):
+        if isinstance(m, dict):
+            a = m.get("acronym")
+            if a:
+                out.append(a)
+        elif isinstance(m, str) and m:
+            out.append(m)
+    return out
 
 
 async def _fetch_score_extras(

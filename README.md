@@ -14,7 +14,7 @@ it polls osu api, posts stat changes, recent plays, medal updates, and account s
 ### discord invite
 replace `YOUR_BOT_CLIENT_ID` with your bot's client ID from discord developer portal
 ```
-https://discord.com/oauth2/authorize?client_id=YOUR_BOT_CLIENT_ID&permissions=68608&scope=bot%20applications.commands
+https://discord.com/oauth2/authorize?client_id=YOUR_BOT_CLIENT_ID&permissions=330752&scope=bot%20applications.commands
 ```
 
 ### admin commands

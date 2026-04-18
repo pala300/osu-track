@@ -295,9 +295,9 @@ def _format_score_line(i: int, entry: dict[str, Any], include_score: bool = True
     pp_s = f"{pp:.0f}pp" if pp is not None else "—"
     combo = s.get("max_combo")
     combo_s = f"{combo:,}x" if isinstance(combo, int) else "—"
-    mods = [m.get("acronym") for m in (s.get("mods") or []) if isinstance(m, dict) and m.get("acronym")]
-    mods_s = f" +{''.join(mods)}" if mods else ""
-    line = f"`#{i}` {grade} **{entry['username']}**{mods_s} · {acc} · {pp_s} · {combo_s}"
+    mods_s = _fmt_mods(s.get("mods"))
+    mods_part = f" · {mods_s}" if mods_s != "`—`" else ""
+    line = f"`#{i}` {grade} **{entry['username']}** · {acc} · {pp_s} · {combo_s}{mods_part}"
     if include_score:
         total = next((s.get(k) for k in ("total_score", "classic_total_score", "score") if s.get(k)), None)
         line += f" · {_num(total)}"
@@ -356,7 +356,9 @@ def build_beatmapset_scores_embed(
         diff_name = html.unescape(bm.get("version") or "—")
         stars = bm.get("difficulty_rating")
         stars_s = f"{stars:.2f}★" if isinstance(stars, (int, float)) else "—"
-        lines = [f"**[{diff_name}] · {stars_s}**"]
+        max_combo = bm.get("max_combo")
+        max_combo_s = f" · {max_combo:,}x max" if isinstance(max_combo, int) else ""
+        lines = [f"**[{diff_name}] · {stars_s}{max_combo_s}**"]
         lines.extend(_format_score_line(i, e, include_score=False) for i, e in enumerate(d["entries"], 1))
         sections.append("\n".join(lines))
 
