@@ -295,13 +295,16 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
 
             kind, target_id = parsed
 
+            sem = asyncio.Semaphore(4)
+
             async def get_score_on(bm_id: int, tracker: Any) -> dict[str, Any] | None:
-                try:
-                    score = await bot.loop.run_in_executor(None, api.fetch_user_score_on_beatmap, bm_id, tracker.user_id, tracker.ruleset)
-                    if score:
-                        return {"username": tracker.username, "score": score}
-                except Exception:
-                    pass
+                async with sem:
+                    try:
+                        score = await bot.loop.run_in_executor(None, api.fetch_user_score_on_beatmap, bm_id, tracker.user_id, tracker.ruleset)
+                        if score:
+                            return {"username": tracker.username, "score": score}
+                    except Exception:
+                        pass
                 return None
 
             if kind == "beatmap":
@@ -347,6 +350,12 @@ def create_bot(settings: Settings, db: TrackerDB, api: OsuApi) -> commands.Bot:
                     return
                 embed = build_beatmapset_scores_embed(bs_data, diff_results, settings.default_ruleset)
                 await interaction.followup.send(embed=embed)
+
+            if not db.get_linked_user(interaction.user.id):
+                await interaction.followup.send(
+                    f"you're not linked — use {command_mentions.get('link', '`/link`')} `<username>` to show your scores here.",
+                    ephemeral=True,
+                )
 
         except Exception:
             log.exception("Error in /map command")
