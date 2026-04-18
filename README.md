@@ -17,21 +17,14 @@ replace `YOUR_BOT_CLIENT_ID` with your bot's client ID from discord developer po
 https://discord.com/oauth2/authorize?client_id=YOUR_BOT_CLIENT_ID&permissions=330752&scope=bot%20applications.commands
 ```
 
-### user install
-the bot supports user installs — lets you use slash commands in any server or dm without the bot being added.
-
-to enable: go to your app in the discord developer portal → installation → enable **user install**. once enabled, users can add it from your bot's profile.
-
-`/rs`, `/bt`, `/top`, `/map` all work outside of servers. `/map` in dms shows scores for all linked users.
-
 ### admin commands
 - `!track <channel_id> <osu_username_or_id>`
 - `!untrack <channel_id>`
-- `!tracks` 
+- `!tracks`
 
 when you track someone, the bot renames the channel to `username-id` and will send updates there.
 
-### user commands 
+### user commands
 - `/link <username>` - link your osu! user to discord to bypass typing [username] for self-targetting commands.
 - `/unlink` - unlink your osu! user from your discord.
 - `/rs [username]` - show user's recently submitted score.
@@ -40,3 +33,9 @@ when you track someone, the bot renames the channel to `username-id` and will se
 - `/map <beatmap>` - show all linked/tracked user's scores for the beatmap. can use url or id.
 - `/help` - show all available commands.
 
+### user install
+supports user installs so you can use commands in any server or dm without the bot being in it.
+
+to enable: discord developer portal, your app, installation, enable user install. once on, users can add it from the bot's profile.
+
+`/map` in dms shows scores for all linked users.

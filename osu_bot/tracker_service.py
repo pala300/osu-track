@@ -101,7 +101,9 @@ class TrackerService:
                     had_new_plays = True
                     for s in reversed(fresh):
                         bid = (s.get("beatmap") or {}).get("id")
-                        mods = [m.get("acronym") for m in (s.get("mods") or []) if isinstance(m, dict)]
+                        mods = [m.get("acronym") if isinstance(m, dict) else m
+                                for m in (s.get("mods") or [])
+                                if (isinstance(m, dict) and m.get("acronym")) or (isinstance(m, str) and m)]
                         max_pp = None
                         fc_combo = None
 

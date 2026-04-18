@@ -205,8 +205,8 @@ def build_first_embed(user_id: int, ruleset: str, stats: dict[str, Any]) -> disc
     if stats.get("_avatar_url"):
         em.set_thumbnail(url=stats["_avatar_url"])
 
-    em.add_field(name="global rank",  value=f"`{fmt('global_rank',  stats.get('global_rank'))}`",   inline=True)
-    em.add_field(name="country rank", value=f"`{fmt('country_rank', stats.get('country_rank'))}`",  inline=True)
+    em.add_field(name="🌐 global rank",        value=f"`{fmt('global_rank',  stats.get('global_rank'))}`",  inline=True)
+    em.add_field(name=_country_label(stats), value=f"`{fmt('country_rank', stats.get('country_rank'))}`", inline=True)
     em.add_field(name="pp",           value=f"`{fmt('pp',           stats.get('pp'))}`",            inline=True)
 
     em.add_field(name="accuracy",     value=f"`{fmt('hit_accuracy', stats.get('hit_accuracy'))}`",  inline=True)
@@ -234,7 +234,12 @@ def build_change_embed(user_id: int, ruleset: str, stats: dict[str, Any], change
 
     for ch in changes:
         arrow = EMOJI_UP if ch["improved"] else EMOJI_DOWN
-        label = _country_label(stats) if ch["key"] == "country_rank" else ch["label"].lower()
+        if ch["key"] == "country_rank":
+            label = _country_label(stats)
+        elif ch["key"] == "global_rank":
+            label = "🌐 global rank"
+        else:
+            label = ch["label"].lower()
         value = f"`{fmt(ch['key'], ch['old'])}` → `{fmt(ch['key'], ch['new'])}` (`{fmt_delta(ch['key'], ch['delta'])}`)"
         em.add_field(name=f"{arrow} {label}", value=value, inline=False)
 

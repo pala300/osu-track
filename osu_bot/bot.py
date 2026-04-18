@@ -12,7 +12,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from .config import Settings
-from .db import TrackerDB
+from .db import TrackerDB, TrackerRow
 from .embeds import build_beatmapset_scores_embed, build_map_scores_embed, build_recent_play_embed, build_top_plays_embed
 from .osu_api import OsuApi
 from .tracker_service import TrackerService, safe_channel_name
@@ -449,7 +449,7 @@ def _parse_beatmap_input(value: str) -> tuple[str, int] | None:
     return None
 
 
-def _parse_date(ts: str):
+def _parse_date(ts: str) -> datetime.date | None:
     try:
         return datetime.fromisoformat(ts.replace("Z", "+00:00")).date()
     except Exception:
