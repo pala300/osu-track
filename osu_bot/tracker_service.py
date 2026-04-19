@@ -157,9 +157,9 @@ class TrackerService:
 
         changes = diff_stats(state.snapshot, stats)
 
-        old_achievement_ids = set(state.snapshot.get("_achievement_ids") or [])
+        old_achievement_ids = state.snapshot.get("_achievement_ids")
         new_achievement_ids = set(stats.get("_achievement_ids") or [])
-        new_medal_ids = list(new_achievement_ids - old_achievement_ids)
+        new_medal_ids = list(new_achievement_ids - set(old_achievement_ids)) if old_achievement_ids is not None else []
         if new_medal_ids:
             try:
                 medals_catalog = await loop.run_in_executor(None, self.api.fetch_medals)
