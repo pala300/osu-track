@@ -13,6 +13,7 @@ class OsuApi:
         self.client_secret = client_secret
         self._token: str | None = None
         self._expires_at: float = 0
+        self._medals_cache: list[dict[str, Any]] | None = None
 
     def _token_value(self) -> str:
         now = time.time()
@@ -84,6 +85,15 @@ class OsuApi:
         if not scores:
             return None
         return max(scores, key=lambda s: s.get("pp") or 0)
+
+    def fetch_medals(self) -> list[dict[str, Any]]:
+        if self._medals_cache is not None:
+            return self._medals_cache
+        resp = requests.get("https://osu.ppy.sh/api/v2/medals", headers=self._headers(), timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        self._medals_cache = data if isinstance(data, list) else data.get("medals", [])
+        return self._medals_cache
 
     def fetch_beatmap(self, beatmap_id: int) -> dict[str, Any] | None:
         resp = requests.get(

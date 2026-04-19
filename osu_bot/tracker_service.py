@@ -157,6 +157,22 @@ class TrackerService:
 
         changes = diff_stats(state.snapshot, stats)
 
+        old_achievement_ids = set(state.snapshot.get("_achievement_ids") or [])
+        new_achievement_ids = set(stats.get("_achievement_ids") or [])
+        new_medal_ids = list(new_achievement_ids - old_achievement_ids)
+        if new_medal_ids:
+            try:
+                medals_catalog = await loop.run_in_executor(None, self.api.fetch_medals)
+            except Exception:
+                medals_catalog = []
+            await channel.send(embed=build_medal_embed(
+                tr.user_id, tr.ruleset, stats,
+                state.snapshot.get("medals_count", 0),
+                stats.get("medals_count", 0),
+                new_medal_ids,
+                medals_catalog,
+            ))
+
         if had_new_plays:
             merged_changes = _merge_changes(state.pending_changes or [], changes, state.snapshot, stats)
             self.db.put_state(
@@ -175,10 +191,6 @@ class TrackerService:
         pending_snapshot = state.pending_snapshot
 
         if last_play is not None and (now - last_play) >= SESSION_COOLDOWN and pending_changes:
-            old_medals = (pending_snapshot or {}).get("medals_count", 0)
-            new_medals = stats.get("medals_count", 0)
-            if isinstance(old_medals, int) and isinstance(new_medals, int) and new_medals > old_medals:
-                await channel.send(embed=build_medal_embed(tr.user_id, tr.ruleset, stats, old_medals, new_medals))
             await channel.send(embed=build_change_embed(tr.user_id, tr.ruleset, stats, pending_changes))
             self.db.put_state(
                 tr.channel_id,

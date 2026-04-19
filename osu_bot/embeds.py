@@ -77,7 +77,8 @@ def extract_stats(user: dict[str, Any]) -> dict[str, Any]:
         "ranked_score":  stats.get("ranked_score", 0),
         "total_score":   stats.get("total_score", 0),
         "maximum_combo": stats.get("maximum_combo", 0),
-        "medals_count":  len(user.get("user_achievements", [])),
+        "medals_count":       len(user.get("user_achievements", [])),
+        "_achievement_ids":   [a.get("achievement_id") for a in user.get("user_achievements", [])],
         "_username":     user.get("username", str(user.get("id", ""))),
         "_avatar_url":   user.get("avatar_url", ""),
         "_timestamp":    datetime.now(timezone.utc).isoformat(),
@@ -248,17 +249,41 @@ def build_change_embed(user_id: int, ruleset: str, stats: dict[str, Any], change
     return em
 
 
-def build_medal_embed(user_id: int, ruleset: str, stats: dict[str, Any], old_medals: int, new_medals: int) -> discord.Embed:
-    earned = new_medals - old_medals
-    em = discord.Embed(
-        title=f"🏅 {stats['_username']} unlocked {'a medal' if earned == 1 else f'{earned} medals'}!",
-        description=f"**{old_medals}** → **{new_medals}** total medals",
-        color=COLOR_EMBED,
-        url=f"https://osu.ppy.sh/users/{user_id}/{ruleset}",
-    )
-    if stats.get("_avatar_url"):
-        em.set_thumbnail(url=stats["_avatar_url"])
-    em.set_footer(text="osu · medals")
+def build_medal_embed(
+    user_id: int,
+    ruleset: str,
+    stats: dict[str, Any],
+    old_count: int,
+    new_count: int,
+    new_medal_ids: list[int] | None = None,
+    medals_catalog: list[dict[str, Any]] | None = None,
+) -> discord.Embed:
+    earned = new_count - old_count
+    medal_lookup = {m["id"]: m for m in (medals_catalog or [])}
+    earned_medals = [medal_lookup[mid] for mid in (new_medal_ids or []) if mid in medal_lookup]
+
+    if len(earned_medals) == 1:
+        medal = earned_medals[0]
+        em = discord.Embed(
+            title=f"🏅 {stats['_username']} unlocked a medal!",
+            description=f"**{medal.get('name', '')}**\n{medal.get('description', '')}",
+            color=COLOR_EMBED,
+            url=f"https://osu.ppy.sh/users/{user_id}/{ruleset}",
+        )
+        if medal.get("icon_url"):
+            em.set_thumbnail(url=medal["icon_url"])
+    else:
+        names = "\n".join(f"**{m.get('name', '')}**" for m in earned_medals)
+        em = discord.Embed(
+            title=f"🏅 {stats['_username']} unlocked {earned} medals!",
+            description=names or f"**{old_count}** → **{new_count}** total medals",
+            color=COLOR_EMBED,
+            url=f"https://osu.ppy.sh/users/{user_id}/{ruleset}",
+        )
+        if stats.get("_avatar_url"):
+            em.set_thumbnail(url=stats["_avatar_url"])
+
+    em.set_footer(text=f"osu · medals · {old_count} → {new_count} total")
     return em
 
 
